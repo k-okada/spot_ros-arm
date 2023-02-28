@@ -73,7 +73,7 @@ class ArmWrapper:
             )
 
         self.arm_impedance_command_server = SimpleActionServer(
-            "arm_impedance_control",
+            "arm_impedance_command",
             ArmImpedanceCommandAction,
             execute_cb=self.handle_arm_impedance_command,
             auto_start=False)
