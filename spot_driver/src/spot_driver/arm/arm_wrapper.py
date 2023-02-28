@@ -6,7 +6,7 @@ import rospy
 import actionlib
 
 from std_srvs.srv import Trigger, TriggerResponse
-from spot_msgs.msg import OpenDoorAction, PickObjectInImageAction, PickObjectInImageFeedback, PickObjectInImageResult, PickObjectInImageGoal
+from spot_msgs.msg import OpenDoorAction, PickObjectInImageAction, PickObjectInImageFeedback, PickObjectInImageResult, PickObjectInImageGoal, ArmImpedanceCommandAction, ArmImpedanceCommandResult
 from spot_msgs.srv import OpenDoor, SetArmImpedanceParams, SetArmImpedanceParamsResponse
 from vision_msgs.msg import Detection2D
 from spot_driver.arm.arm_utilities.object_grabber import object_grabber_main, add_grasp_constraint
@@ -71,6 +71,12 @@ class ArmWrapper:
             SetArmImpedanceParams,
             self.handle_arm_impedance_matrix,
             )
+
+        self.arm_impedance_command_server = SimpleActionServer(
+            "arm_impedance_control",
+            ArmImpedanceCommandAction,
+            execute_cb=self.handle_arm_impedance_command)
+        self.arm_impedance_command_server.start()
 
         self.arm_joint_trajectory_server = SimpleActionServer(
             "arm_controller/follow_joint_trajectory",
@@ -168,17 +174,31 @@ class ArmWrapper:
             rospy.logerr('Error :{}'.format(e))
             return SetArmImpedanceParamsResponse(success=False)
 
-    def handle_arm_impedance_command(self, req):
+    def handle_arm_impedance_command(self, goal):
 
         try:
-            self._handle_arm_impedance_control(linear_stiffness=req.linear_stiffness,
-                                               rotational_stiffness=req.rotational_stiffness,
-                                               linear_damping=req.linear_damping,
-                                               rotational_damping=req.rotational_damping)
-            return SetArmImpedanceParamsResponse(success=True)
+            self._handle_arm_impedance_control(target_pose=goal.target_pose,
+                                               linear_stiffness=[goal.linear_stiffness.x,
+                                                                 goal.linear_stiffness.y,
+                                                                 goal.linear_stiffness.z,],
+                                               rotational_stiffness=[goal.rotational_stiffness.x,
+                                                                     goal.rotational_stiffness.y,
+                                                                     goal.rotational_stiffness.z,],
+                                               linear_damping=[goal.linear_damping.x,
+                                                               goal.linear_damping.y,
+                                                               goal.linear_damping.z,],
+                                               rotational_damping=[goal.rotational_damping.x,
+                                                                   goal.rotational_damping.y,
+                                                                   goal.rotational_damping.z,])
+            result = ArmImpedanceCommandResult()
+            result.success = True
+            return self.arm_impedance_command_server.set_succeeded(result)
         except Exception as e:
             rospy.logerr('Error :{}'.format(e))
-            return SetArmImpedanceParamsResponse(success=False)
+            result = ArmImpedanceCommandResult()
+            result.success = True
+            result.message('Error: {}'.format(e))
+            return self.arm_impedance_command_server.set_aborted(result)
 
     def _handle_arm_impedance_control(self,
                                       root_frame_name=GRAV_ALIGNED_BODY_FRAME_NAME,
