@@ -56,6 +56,7 @@ add_action_files(
   OpenDoor.action
   Trajectory.action
   PickObjectInImage.action
+  ArmImpedanceCommand.action
 )
 
 generate_messages(
