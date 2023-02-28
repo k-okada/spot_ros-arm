@@ -4,6 +4,6 @@ geometry_msgs/Vector3 rotational_stiffness	# Rotational stiffness must be less t
 geometry_msgs/Vector3 linear_damping		# Linear damping must be less than or equal to 2.500000 Ns/m
 geometry_msgs/Vector3 rotational_damping	# Rotational damping must be less than or equal to 1.000000 Nms/rad
 ---
-bool sucess
+bool success
 string message
 ---
