@@ -75,7 +75,8 @@ class ArmWrapper:
         self.arm_joint_trajectory_server = SimpleActionServer(
             "arm_controller/follow_joint_trajectory",
             FollowJointTrajectoryAction,
-            execute_cb=self.handle_arm_joint_trajectory)
+            execute_cb=self.handle_arm_joint_trajectory,
+            auto_start=False)
         self.arm_joint_trajectory_server.start()
 
         self.grasp_point_userinput_srv = rospy.Service(
