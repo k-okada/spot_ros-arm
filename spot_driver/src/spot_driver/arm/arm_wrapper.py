@@ -95,7 +95,8 @@ class ArmWrapper:
         self.pick_object_in_image_server = SimpleActionServer(
             "pick_object_in_image",
             PickObjectInImageAction,
-            execute_cb=self.handle_pick_object_in_image)
+            execute_cb=self.handle_pick_object_in_image,
+            auto_start=False)
         self.pick_object_in_image_server.start()
 
         self._init_bosdyn_clients()
