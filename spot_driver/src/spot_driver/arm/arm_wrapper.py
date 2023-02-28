@@ -244,7 +244,7 @@ class ArmWrapper:
                                       Quat(target_pose.orientation.w,
                                            target_pose.orientation.x,
                                            target_pose.orientation.y,
-                                           target_pose.orientation.z).to_proto()))
+                                           target_pose.orientation.z)).to_proto())
 
         # Execute the impedance command.
         cmd_id = command_client.robot_command(robot_cmd)
