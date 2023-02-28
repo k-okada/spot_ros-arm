@@ -146,72 +146,108 @@ class ArmWrapper:
             self._robot, self._spot_wrapper
         ), "Complete!"
 
-    def handle_arm_impedance_matrix(self, params):
-        robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
+    def handle_arm_impedance_matrix(self, req):
 
-        # Tell the robot to stand up, parameterized to enable the body to adjust its height to
-        # assist manipulation. For this demo, that means the robot's base will descend, enabling
-        # the hand to reach the ground.
-        # The command service is used to issue commands to a robot.
-        # The set of valid commands for a robot depends on hardware configuration. See
-        # RobotCommandBuilder for more detailed examples on command building. The robot
-        # command service requires timesync between the robot and the client.
-        ## robot.logger.info("Commanding robot to stand...")
-        command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
+        try:
+            self._handle_arm_impedance_control(linear_stiffness=[req.linear_stiffness.x,
+                                                                 req.linear_stiffness.y,
+                                                                 req.linear_stiffness.z,],
+                                               rotational_stiffness=[req.rotational_stiffness.x,
+                                                                     req.rotational_stiffness.y,
+                                                                     req.rotational_stiffness.z,],
+                                               linear_damping=[req.linear_damping.x,
+                                                               req.linear_damping.y,
+                                                               req.linear_damping.z,],
+                                               rotational_damping=[req.rotational_damping.x,
+                                                                   req.rotational_damping.y,
+                                                                   req.rotational_damping.z,])
+            return SetArmImpedanceParamsResponse(success=True)
+        except Exception as e:
+            rospy.logerr('Error :{}'.format(e))
+            return SetArmImpedanceParamsResponse(success=False)
+
+    def handle_arm_impedance_command(self, req):
+
+        try:
+            self._handle_arm_impedance_control(linear_stiffness=req.linear_stiffness,
+                                               rotational_stiffness=req.rotational_stiffness,
+                                               linear_damping=req.linear_damping,
+                                               rotational_damping=req.rotational_damping)
+            return SetArmImpedanceParamsResponse(success=True)
+        except Exception as e:
+            rospy.logerr('Error :{}'.format(e))
+            return SetArmImpedanceParamsResponse(success=False)
+
+    def _handle_arm_impedance_control(self,
+                                      root_frame_name=GRAV_ALIGNED_BODY_FRAME_NAME,
+                                      linear_stiffness=[500, 500, 500],
+                                      rotational_stiffness=[],
+                                      linear_damping=[],
+                                      rotational_damping=[],
+                                      target_pose=None):
+
+        robot_state_client = self._robot.ensure_client(
+            RobotStateClient.default_service_name)
+        command_client = self._robot.ensure_client(
+            RobotCommandClient.default_service_name)
 
         body_control = spot_command_pb2.BodyControlParams(
             body_assist_for_manipulation=spot_command_pb2.BodyControlParams.
             BodyAssistForManipulation(enable_hip_height_assist=True, enable_body_yaw_assist=False))
-        # Define a stand command that we'll send with the rest of our arm commands so we keep
-        # adjusting the body for the arm
         stand_command = RobotCommandBuilder.synchro_stand_command(
             params=spot_command_pb2.MobilityParams(body_control=body_control))
-
-        # First, let's pick a task frame that is in front of the robot on the ground.
-        robot_state = robot_state_client.get_robot_state()
-        body_T_task = get_a_tform_b(robot_state.kinematic_state.transforms_snapshot,
-                                    GRAV_ALIGNED_BODY_FRAME_NAME, HAND_FRAME_NAME)
-
-        # Now, let's set our tool frame to be the tip of the robot's bottom jaw. Flip the
-        # orientation so that when the hand is pointed downwards, the tool's z-axis is
-        # pointed upward.
-        wr1_T_tool = SE3Pose(0.23589, 0, -0.03943, Quat.from_pitch(-math.pi / 2))
-
-        # Execute the Cartesian command.
-        #### cmd_id = command_client.robot_command(robot_cmd)
-        #### block_until_arm_arrives(command_client, cmd_id, 3.0)
 
         # First, let's do an impedance command where we set all of our stiffnesses high and
         # move around. This will act similar to a position command, but be slightly less stiff.
         robot_cmd = robot_command_pb2.RobotCommand()
-        robot_cmd.CopyFrom(stand_command)  # Make sure we keep adjusting the body for the arm
+        # Make sure we keep adjusting the body for the arm
+        robot_cmd.CopyFrom(stand_command)
         impedance_cmd = robot_cmd.synchronized_command.arm_command.arm_impedance_command
 
+        robot_state = robot_state_client.get_robot_state()
+        root_T_current_link_wr1 = get_a_tform_b(
+            robot_state.kinematic_state.transforms_snapshot,
+            root_frame_name,
+            'link_wr1')
+        link_wr1_T_tool = SE3Pose(0.175, 0, -0.03, Quat(w=1.0, x=0.0, y=0.0, z=0.0))
+        root_T_current_tool = root_T_current_link_wr1 * link_wr1_T_tool
+
         # Set up our root frame, task frame, and tool frame.
-        impedance_cmd.root_frame_name = GRAV_ALIGNED_BODY_FRAME_NAME
-        impedance_cmd.root_tform_task.CopyFrom(body_T_task.to_proto())
-        impedance_cmd.wrist_tform_tool.CopyFrom(wr1_T_tool.to_proto())
+        impedance_cmd.root_frame_name = root_frame_name
+        impedance_cmd.root_tform_task.CopyFrom(
+            SE3Pose.from_identity().to_proto())
+        impedance_cmd.wrist_tform_tool.CopyFrom(link_wr1_T_tool.to_proto())
 
         # Set up stiffness and damping matrices. Note: if these values are set too high,
         # the arm can become unstable. Currently, these are the max stiffness and
         # damping values that can be set.
         impedance_cmd.diagonal_stiffness_matrix.CopyFrom(
-            geometry_pb2.Vector(values=[params.linear_stiffness.x, params.linear_stiffness.y, params.linear_stiffness.z,
-                                        params.rotational_stiffness.x, params.rotational_stiffness.y, params.rotational_stiffness.z]))
+            geometry_pb2.Vector(values=[linear_stiffness[0], linear_stiffness[1], linear_stiffness[2],
+                                        rotational_stiffness[0], rotational_stiffness[1], rotational_stiffness[2]]))
         impedance_cmd.diagonal_damping_matrix.CopyFrom(
-            geometry_pb2.Vector(values=[params.linear_damping.x, params.linear_damping.y, params.linear_damping.z,
-                                        params.rotational_damping.x, params.rotational_damping.y, params.rotational_damping.z]))
+            geometry_pb2.Vector(values=[linear_damping[0], linear_damping[1], linear_damping[2],
+                                        rotational_damping[0], rotational_damping[1], rotational_damping[2]]))
+
         # Set up our `desired_tool` trajectory. This is where we want the tool to be with respect
         # to the task frame. The stiffness we set will drag the tool towards `desired_tool`.
         traj = impedance_cmd.task_tform_desired_tool
         pt1 = traj.points.add()
         pt1.time_since_reference.CopyFrom(seconds_to_duration(2.0))
-        pt1.pose.CopyFrom(SE3Pose(0, 0, 0, Quat.from_pitch(-math.pi / 2)).to_proto())
+        if target_pose is None:
+            pt1.pose.CopyFrom(root_T_current_tool)
+        else:
+            pt1.pose.CopyFrom(SE3Pose(target_pose.position.x,
+                                      target_pose.position.y,
+                                      target_pose.position.z,
+                                      Quat(target_pose.orientation.w,
+                                           target_pose.orientation.x,
+                                           target_pose.orientation.y,
+                                           target_pose.orientation.z).to_proto()))
 
         # Execute the impedance command.
         cmd_id = command_client.robot_command(robot_cmd)
         time.sleep(2.0)
-        return SetArmImpedanceParamsResponse(success=True)
+        return cmd_id
 
     def handle_arm_joint_trajectory(self, goal):
         joint_names = ['arm0.sh0', 'arm0.sh1', 'arm0.el0', 'arm0.el1', 'arm0.wr0', 'arm0.wr1']
