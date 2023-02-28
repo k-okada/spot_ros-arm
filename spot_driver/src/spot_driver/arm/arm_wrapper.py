@@ -75,7 +75,8 @@ class ArmWrapper:
         self.arm_impedance_command_server = SimpleActionServer(
             "arm_impedance_control",
             ArmImpedanceCommandAction,
-            execute_cb=self.handle_arm_impedance_command)
+            execute_cb=self.handle_arm_impedance_command,
+            auto_start=False)
         self.arm_impedance_command_server.start()
 
         self.arm_joint_trajectory_server = SimpleActionServer(
