@@ -234,7 +234,7 @@ class ArmWrapper:
         pt1 = traj.points.add()
         pt1.time_since_reference.CopyFrom(seconds_to_duration(2.0))
         if target_pose is None:
-            pt1.pose.CopyFrom(root_T_current_tool)
+            pt1.pose.CopyFrom(root_T_current_tool.to_proto())
         else:
             pt1.pose.CopyFrom(SE3Pose(target_pose.position.x,
                                       target_pose.position.y,
