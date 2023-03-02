@@ -66,12 +66,6 @@ class ArmWrapper:
             self.handle_gripper_close,
         )
 
-        self.arm_impedance_parameters = rospy.Service(
-            "arm_impedance_parameters",
-            SetArmImpedanceParams,
-            self.handle_arm_impedance_matrix,
-            )
-
         self.arm_impedance_command_server = SimpleActionServer(
             "arm_impedance_command",
             ArmImpedanceCommandAction,
@@ -154,26 +148,6 @@ class ArmWrapper:
         return object_grabber_main(
             self._robot, self._spot_wrapper
         ), "Complete!"
-
-    def handle_arm_impedance_matrix(self, req):
-
-        try:
-            self._handle_arm_impedance_control(linear_stiffness=[req.linear_stiffness.x,
-                                                                 req.linear_stiffness.y,
-                                                                 req.linear_stiffness.z,],
-                                               rotational_stiffness=[req.rotational_stiffness.x,
-                                                                     req.rotational_stiffness.y,
-                                                                     req.rotational_stiffness.z,],
-                                               linear_damping=[req.linear_damping.x,
-                                                               req.linear_damping.y,
-                                                               req.linear_damping.z,],
-                                               rotational_damping=[req.rotational_damping.x,
-                                                                   req.rotational_damping.y,
-                                                                   req.rotational_damping.z,])
-            return SetArmImpedanceParamsResponse(success=True)
-        except Exception as e:
-            rospy.logerr('Error :{}'.format(e))
-            return SetArmImpedanceParamsResponse(success=False)
 
     def handle_arm_impedance_command(self, goal):
 
