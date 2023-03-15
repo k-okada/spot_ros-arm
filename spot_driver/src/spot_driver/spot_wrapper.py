@@ -181,65 +181,71 @@ class AsyncIdle(AsyncPeriodicQuery):
             else:
                 self._spot_wrapper._last_velocity_command_time = None
 
-
-        if not self._spot_wrapper._is_moving:
-            if self._spot_wrapper._last_stand_command != None:
-                hold_arbitrary_pose = False
-                if self._spot_wrapper._hold_pose_inf or (self._spot_wrapper._hold_pose_til is not None and time.time() < self._spot_wrapper._hold_pose_til):
-                    hold_arbitrary_pose = True
-                try:
-                    response = self._client.robot_command_feedback(self._spot_wrapper._last_stand_command)
-                    self._spot_wrapper._is_sitting = False
-                    if (response.feedback.synchronized_feedback.mobility_command_feedback.stand_feedback.status ==
-                            basic_command_pb2.StandCommand.Feedback.STATUS_IS_STANDING):
-                        if hold_arbitrary_pose:
-                            return
-                        self._spot_wrapper._is_standing = True
-                        self._spot_wrapper._last_stand_command = None
-                        self._hold_pose_til = None
-                    else:
-                        self._spot_wrapper._is_standing = False
-                except (ResponseError, RpcError) as e:
-                    self._logger.error("Error when getting robot command feedback: %s", e)
+        if self._spot_wrapper._last_stand_command != None:
+            hold_arbitrary_pose = False
+            if self._spot_wrapper._hold_pose_inf or (self._spot_wrapper._hold_pose_til is not None and time.time() < self._spot_wrapper._hold_pose_til):
+                hold_arbitrary_pose = True
+            try:
+                response = self._client.robot_command_feedback(self._spot_wrapper._last_stand_command)
+                self._spot_wrapper._is_sitting = False
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.stand_feedback.status ==
+                        basic_command_pb2.StandCommand.Feedback.STATUS_IS_STANDING):
+                    if hold_arbitrary_pose:
+                        return
+                    self._spot_wrapper._is_standing = True
                     self._spot_wrapper._last_stand_command = None
-
-            if self._spot_wrapper._last_sit_command != None:
-                try:
+                    self._hold_pose_til = None
+                else:
                     self._spot_wrapper._is_standing = False
-                    response = self._client.robot_command_feedback(self._spot_wrapper._last_sit_command)
-                    if (response.feedback.synchronized_feedback.mobility_command_feedback.sit_feedback.status ==
-                            basic_command_pb2.SitCommand.Feedback.STATUS_IS_SITTING):
-                        self._spot_wrapper._is_sitting = True
-                        self._spot_wrapper._last_sit_command = None
-                    else:
-                        self._spot_wrapper._is_sitting = False
-                except (ResponseError, RpcError) as e:
-                    self._logger.error("Error when getting robot command feedback: %s", e)
-                    self._spot_wrapper._last_sit_command = None
+            except (ResponseError, RpcError) as e:
+                self._logger.error("Error when getting robot command feedback: %s", e)
+                self._spot_wrapper._last_stand_command = None
 
-        else:
-            if self._spot_wrapper._last_trajectory_command != None:
-                try:
-                    response = self._client.robot_command_feedback(self._spot_wrapper._last_trajectory_command)
-                    status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
-                    # STATUS_AT_GOAL always means that the robot reached the goal. If the trajectory command did not
-                    # request precise positioning, then STATUS_NEAR_GOAL also counts as reaching the goal
-                    if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
-                        (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
-                         not self._spot_wrapper._last_trajectory_command_precise):
-                        self._spot_wrapper._at_goal = True
-                        # Clear the command once at the goal
-                        self._spot_wrapper._last_trajectory_command = None
-                    elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_GOING_TO_GOAL:
-                        self._spot_wrapper._is_moving = True
-                    elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL:
-                        self._spot_wrapper._is_moving = True
-                        self._spot_wrapper._near_goal = True
-                    else:
-                        self._spot_wrapper._last_trajectory_command = None
-                except (ResponseError, RpcError) as e:
-                    self._logger.error("Error when getting robot command feedback: %s", e)
+        if self._spot_wrapper._last_sit_command != None:
+            try:
+                self._spot_wrapper._is_standing = False
+                response = self._client.robot_command_feedback(self._spot_wrapper._last_sit_command)
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.sit_feedback.status ==
+                        basic_command_pb2.SitCommand.Feedback.STATUS_IS_SITTING):
+                    self._spot_wrapper._is_sitting = True
+                    self._spot_wrapper._last_sit_command = None
+                else:
+                    self._spot_wrapper._is_sitting = False
+            except (ResponseError, RpcError) as e:
+                self._logger.error("Error when getting robot command feedback: %s", e)
+                self._spot_wrapper._last_sit_command = None
+
+        if self._spot_wrapper._last_trajectory_command != None:
+            try:
+                response = self._client.robot_command_feedback(self._spot_wrapper._last_trajectory_command)
+                status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
+                # STATUS_AT_GOAL always means that the robot reached the goal. If the trajectory command did not
+                # request precise positioning, then STATUS_NEAR_GOAL also counts as reaching the goal
+                if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
+                    (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
+                     not self._spot_wrapper._last_trajectory_command_precise):
+                    self._spot_wrapper._is_moving = False
+                    self._spot_wrapper._at_goal = True
+                    self._spot_wrapper._near_goal = False
+                    # Clear the command once at the goal
                     self._spot_wrapper._last_trajectory_command = None
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL:
+                    self._spot_wrapper._is_moving = True
+                    self._spot_wrapper._at_goal = False
+                    self._spot_wrapper._near_goal = True
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_GOING_TO_GOAL:
+                    self._spot_wrapper._is_moving = True
+                    self._spot_wrapper._at_goal = False
+                    self._spot_wrapper._near_goal = False
+                else:
+                    self._logger.error("Unknown status: {}".format(status))
+                    self._spot_wrapper._is_moving = False
+                    self._spot_wrapper._at_goal = False
+                    self._spot_wrapper._near_goal = False
+                    self._spot_wrapper._last_trajectory_command = None
+            except (ResponseError, RpcError) as e:
+                self._logger.error("Error when getting robot command feedback: %s", e)
+                self._spot_wrapper._last_trajectory_command = None
 
         #if self._spot_wrapper.is_standing and not self._spot_wrapper._is_moving:
         if (self._spot_wrapper.is_standing and not self._spot_wrapper.is_moving
@@ -627,7 +633,7 @@ class SpotWrapper():
             timesync_endpoint: (optional) Time sync endpoint
         """
         try:
-            id = self._robot_command_client.robot_command_async(lease=None, command=command_proto, end_time_secs=end_time_secs, timesync_endpoint=timesync_endpoint)
+            id = self._robot_command_client.robot_command_async(lease=None, command=command_proto, end_time_secs=end_time_secs, timesync_endpoint=timesync_endpoint).result()
             return True, "Success", id
         except Exception as e:
             return False, str(e), None
@@ -731,7 +737,7 @@ class SpotWrapper():
         self._at_goal = False
         self._near_goal = False
         self._last_trajectory_command_precise = precise_position
-        self._logger.info("got command duration of {}".format(cmd_duration))
+        self._logger.info("args: {}, {}, {}, {}, {}, {}".format(goal_x, goal_y, goal_heading, cmd_duration, frame_name, precise_position))
         end_time=time.time() + cmd_duration
         if frame_name == 'vision':
             vision_tform_body = frame_helpers.get_vision_tform_body(
@@ -766,19 +772,22 @@ class SpotWrapper():
 
         if response[0]:
             self._last_trajectory_command = response[2]
+            command_id = self._last_trajectory_command
             while True:
-                response = self._robot_command_client.robot_command_feedback(self._last_trajectory_command)
-                status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
-                if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
-                    (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
-                     not self._last_trajectory_command_precise):
+                response = self._robot_command_client.robot_command_feedback(command_id)
+                command_status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
+                movement_status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.body_movement_status
+                if command_status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
+                    (command_status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and not precise_position) or \
+                    command_status == basic_command_pb2.SE2TrajectoryCommand.Feedback.BODY_STATUS_SETTLED:
                     success = True
                     message = "Goal reached."
                     break
-                if time.time() < end_time:
+                elif time.time() > end_time:
                     success = False
                     message = "Command timeout"
                     break
+                self._logger.info("command_status: {}, movement_status: {}".format(command_status, movement_status))
             return success, message
         else:
             self._logger.error("Failed to issue a trajectory command.")
