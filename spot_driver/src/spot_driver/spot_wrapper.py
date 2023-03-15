@@ -724,8 +724,8 @@ class SpotWrapper():
                     self._robot_state_client.get_robot_state().kinematic_state.transforms_snapshot)
             body_tform_goal = math_helpers.SE3Pose(x=goal_x, y=goal_y, z=0, rot=math_helpers.Quat.from_yaw(goal_heading))
             vision_tform_goal = vision_tform_body * body_tform_goal
-            response = self._robot_command(
-                            RobotCommandBuilder.synchro_se2_trajectory_point_command(
+            response = self._robot_command_async(
+                            RobotCommandBuilder.trajectory_command(
                                 goal_x=vision_tform_goal.x,
                                 goal_y=vision_tform_goal.y,
                                 goal_heading=vision_tform_goal.rot.to_yaw(),
@@ -738,8 +738,8 @@ class SpotWrapper():
                     self._robot_state_client.get_robot_state().kinematic_state.transforms_snapshot)
             body_tform_goal = math_helpers.SE3Pose(x=goal_x, y=goal_y, z=0, rot=math_helpers.Quat.from_yaw(goal_heading))
             odom_tform_goal = odom_tform_body * body_tform_goal
-            response = self._robot_command(
-                            RobotCommandBuilder.synchro_se2_trajectory_point_command(
+            response = self._robot_command_async(
+                            RobotCommandBuilder.trajectory_command(
                                 goal_x=odom_tform_goal.x,
                                 goal_y=odom_tform_goal.y,
                                 goal_heading=odom_tform_goal.rot.to_yaw(),
@@ -749,9 +749,27 @@ class SpotWrapper():
                             )
         else:
             raise ValueError('frame_name must be \'vision\' or \'odom\'')
+
         if response[0]:
             self._last_trajectory_command = response[2]
-        return response[0], response[1]
+            while True:
+                response = self._client.robot_command_feedback(self._spot_wrapper._last_trajectory_command)
+                status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
+                if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
+                    (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
+                     not self._spot_wrapper._last_trajectory_command_precise):
+                    self._spot_wrapper._at_goal = True
+                    success = True
+                    message = "Goal reached."
+                    break
+                if time.time() < end_time:
+                    success = False
+                    message = "Command timeout"
+                    break
+            return success, message
+        else:
+            self._logger.error("Failed to issue a trajectory command.")
+            return response[0], response[1]
 
     def list_graph(self, upload_path):
         """List waypoint ids of garph_nav
