@@ -127,14 +127,7 @@ def update_waypoints_and_edges(graph, localization_id, do_print=True):
                 edges[edge.id.to_waypoint].append(edge.id.from_waypoint)
         else:
             edges[edge.id.to_waypoint] = [edge.id.from_waypoint]
-        if do_print:
-            print(
-                "(Edge) from waypoint {} to waypoint {} (cost {})".format(
-                    edge.id.from_waypoint,
-                    edge.id.to_waypoint,
-                    edge.annotations.cost.value,
-                )
-            )
+        logger.info("(Edge) from waypoint id: {} and to waypoint id: {}".format(edge.id.from_waypoint, edge.id.to_waypoint))
 
     return name_to_id, edges
 
