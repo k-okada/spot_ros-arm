@@ -67,7 +67,7 @@ def find_unique_waypoint_id(short_code, graph, name_to_id):
     return ret
 
 
-def update_waypoints_and_edges(graph, localization_id, do_print=True):
+def update_waypoints_and_edges(graph, localization_id, logger):
     """Update and print waypoint ids and edge ids."""
     name_to_id = dict()
     edges = dict()
