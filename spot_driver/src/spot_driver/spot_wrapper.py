@@ -1015,7 +1015,7 @@ class SpotWrapper():
         waypoint_ids = args[0]
         for i in range(len(waypoint_ids)):
             waypoint_ids[i] = graph_nav_util.find_unique_waypoint_id(
-                waypoint_ids[i], self._current_graph, self._current_annotation_name_to_wp_id)
+                waypoint_ids[i], self._current_graph, self._current_annotation_name_to_wp_id, self._logger)
             if not waypoint_ids[i]:
                 # Failed to find the unique waypoint id.
                 return
