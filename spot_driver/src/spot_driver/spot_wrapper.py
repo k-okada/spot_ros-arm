@@ -618,6 +618,20 @@ class SpotWrapper():
         except Exception as e:
             return False, str(e), None
 
+    def _robot_command_async(self, command_proto, end_time_secs=None, timesync_endpoint=None):
+        """Generic async function for sending commands to robots.
+
+        Args:
+            command_proto: robot_command_pb2 object to send to the robot.  Usually made with RobotCommandBuilder
+            end_time_secs: (optional) Time-to-live for the command in seconds
+            timesync_endpoint: (optional) Time sync endpoint
+        """
+        try:
+            id = self._robot_command_client.robot_command_async(lease=None, command=command_proto, end_time_secs=end_time_secs, timesync_endpoint=timesync_endpoint)
+            return True, "Success", id
+        except Exception as e:
+            return False, str(e), None
+
     def stop(self):
         """Stop the robot's motion."""
         response = self._robot_command(RobotCommandBuilder.stop_command())
