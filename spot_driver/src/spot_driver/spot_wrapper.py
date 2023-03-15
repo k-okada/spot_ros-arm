@@ -767,7 +767,7 @@ class SpotWrapper():
         if response[0]:
             self._last_trajectory_command = response[2]
             while True:
-                response = self._client.robot_command_feedback(self._spot_wrapper._last_trajectory_command)
+                response = self._robot_command_client.robot_command_feedback(self._spot_wrapper._last_trajectory_command)
                 status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
                 if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
                     (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
