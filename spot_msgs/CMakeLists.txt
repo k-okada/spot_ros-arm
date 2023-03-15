@@ -41,6 +41,7 @@ add_service_files(
   ClearBehaviorFault.srv
   ListGraph.srv
   OpenDoor.srv
+  DownloadGraph.srv
   SetLocalizationFiducial.srv
   SetLocalizationWaypoint.srv
   SetLocomotion.srv
