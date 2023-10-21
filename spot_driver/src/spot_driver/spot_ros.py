@@ -608,9 +608,11 @@ class SpotROS():
         # run navigate_to
         resp = self.spot_wrapper.navigate_to(
                 id_navigate_to = msg.id_navigate_to,
-                (msg.velocity_limit.linear.x if msg.velocity_limit.linear.x == 0.0 else None,
-                 msg.velocity_limit.linear.y if msg.velocity_limit.linear.y == 0.0 else None,
-                 msg.velocity_limit.angular.z if msg.velocity_limit.angular.z == 0.0 else None)
+                velocity_limit=(
+                    msg.velocity_limit.linear.x if msg.velocity_limit.linear.x == 0.0 else None,
+                    msg.velocity_limit.linear.y if msg.velocity_limit.linear.y == 0.0 else None,
+                    msg.velocity_limit.angular.z if msg.velocity_limit.angular.z == 0.0 else None
+                    )
                 )
         self.run_navigate_to = False
         feedback_thread.join()
