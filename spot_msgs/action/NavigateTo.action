@@ -1,4 +1,5 @@
 string id_navigate_to # Waypoint id string for where to go
+geometry_msgs/Twist velocity_limit # limit for navigation, linear.x linear.y and angular.z are used. if zero, no set.
 ---
 bool success   # indicate successful run of triggered service
 string message # informational, e.g. for error messages

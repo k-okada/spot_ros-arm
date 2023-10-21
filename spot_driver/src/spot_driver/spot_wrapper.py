@@ -822,11 +822,14 @@ class SpotWrapper():
         self._cancel_navigate_to()
 
     def navigate_to(self,
-                    id_navigate_to):
+                    id_navigate_to,
+                    velocity_limit = (None, None, None)
+                    ):
         """ navigate with graph nav.
 
         Args:
            id_navigate_to : Waypont id string for where to goal
+           velocity_limit : Limit to velocity, (linear_x, linear_y, angular_z)
         """
         self._get_localization_state()
         resp = self._start_navigate_to(id_navigate_to)
