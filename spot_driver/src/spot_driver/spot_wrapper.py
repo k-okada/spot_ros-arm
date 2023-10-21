@@ -727,7 +727,12 @@ class SpotWrapper():
         self._at_goal = False
         self._near_goal = False
         self._last_trajectory_command_precise = precise_position
-        self._logger.info("got command duration of {}".format(cmd_duration))
+        self._logger.warning(f"goal_x: {goal_x}")
+        self._logger.warning(f"goal_y: {goal_y}")
+        self._logger.warning(f"goal_heading: {goal_heading}")
+        self._logger.warning(f"cmd_duration: {cmd_duration}")
+        self._logger.warning(f"frame_name: {frame_name}")
+        self._logger.warning(f"precise_position: {precise_position}")
         end_time=time.time() + cmd_duration
         if frame_name == 'vision':
             vision_tform_body = frame_helpers.get_vision_tform_body(
@@ -832,7 +837,7 @@ class SpotWrapper():
            velocity_limit : Limit to velocity, (linear_x, linear_y, angular_z)
         """
         self._get_localization_state()
-        resp = self._start_navigate_to(id_navigate_to)
+        resp = self._start_navigate_to(id_navigate_to, velocity_limit=velocity_limit)
         return resp
 
     ## copy from spot-sdk/python/examples/graph_nav_command_line/graph_nav_command_line.py
@@ -979,7 +984,7 @@ class SpotWrapper():
         velocity_limit_linear_y = velocity_limit[1] # [m/s]
         velocity_limit_angular_z = velocity_limit[2] # [rad/s]
         travel_params = None
-        if velocity_limit_x is not None or velocity_limit_y is not None:
+        if velocity_limit_linear_x is not None or velocity_limit_linear_y is not None or velocity_limit_angular_z is not None:
             travel_params = graph_nav_pb2.TravelParams()
             if velocity_limit_linear_x is not None:
                 travel_params.velocity_limit.max_vel.linear.x = velocity_limit_linear_x
@@ -987,6 +992,11 @@ class SpotWrapper():
                 travel_params.velocity_limit.max_vel.linear.y = velocity_limit_linear_y
             if velocity_limit_angular_z is not None:
                 travel_params.velocity_limit.max_vel.angular = velocity_limit_angular_z
+        self._logger.warning(f"travel_params: {travel_params}")
+        self._logger.warning(f"velocity_limit: {velocity_limit}")
+        self._logger.warning(f"velocity_limit_linear_x: {velocity_limit_linear_x}")
+        self._logger.warning(f"velocity_limit_linear_y: {velocity_limit_linear_y}")
+        self._logger.warning(f"velocity_limit_angular_z: {velocity_limit_angular_z}")
 
         self._navigate_to_valid = True
         nav_to_cmd_id = None

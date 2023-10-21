@@ -443,6 +443,8 @@ class SpotROS():
             return
 
         cmd_duration = rospy.Duration(req.duration.data.secs, req.duration.data.nsecs)
+        rospy.logwarn(f"req.duration: {req.duration}")
+        rospy.logwarn(f"cmd_duration: {cmd_duration}")
         resp = self.spot_wrapper.trajectory_cmd(
                         goal_x=req.target_pose.pose.position.x,
                         goal_y=req.target_pose.pose.position.y,
@@ -606,12 +608,13 @@ class SpotROS():
         feedback_thread.start()
         preemption_thread.start()
         # run navigate_to
+        rospy.logwarn(f"msg.velocity_limit: {msg.velocity_limit}")
         resp = self.spot_wrapper.navigate_to(
                 id_navigate_to = msg.id_navigate_to,
                 velocity_limit=(
-                    msg.velocity_limit.linear.x if msg.velocity_limit.linear.x == 0.0 else None,
-                    msg.velocity_limit.linear.y if msg.velocity_limit.linear.y == 0.0 else None,
-                    msg.velocity_limit.angular.z if msg.velocity_limit.angular.z == 0.0 else None
+                    msg.velocity_limit.linear.x if msg.velocity_limit.linear.x != 0.0 else None,
+                    msg.velocity_limit.linear.y if msg.velocity_limit.linear.y != 0.0 else None,
+                    msg.velocity_limit.angular.z if msg.velocity_limit.angular.z != 0.0 else None
                     )
                 )
         self.run_navigate_to = False
