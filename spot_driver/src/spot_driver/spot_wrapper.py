@@ -952,7 +952,7 @@ class SpotWrapper():
     def _cancel_navigate_to(self):
         self._navigate_to_valid = False
 
-    def _start_navigate_to(self, waypoint_id):
+    def _start_navigate_to(self, waypoint_id, velocity_limit = (None, None, None)):
         """Navigate to a specific waypoint."""
         # Take the first argument as the destination waypoint.
 
@@ -972,6 +972,19 @@ class SpotWrapper():
         sublease = self._lease.create_sublease()
         self._lease_keepalive.shutdown()
 
+        velocity_limit_linear_x = velocity_limit[0] # [m/s]
+        velocity_limit_linear_y = velocity_limit[1] # [m/s]
+        velocity_limit_angular_z = velocity_limit[2] # [rad/s]
+        travel_params = None
+        if velocity_limit_x is not None or velocity_limit_y is not None:
+            travel_params = graph_nav_pb2.TravelParams()
+            if velocity_limit_linear_x is not None:
+                travel_params.velocity_limit.max_vel.linear.x = velocity_limit_linear_x
+            if velocity_limit_linear_y is not None:
+                travel_params.velocity_limit.max_vel.linear.y = velocity_limit_linear_y
+            if velocity_limit_angular_z is not None:
+                travel_params.velocity_limit.max_vel.angular = velocity_limit_angular_z
+
         self._navigate_to_valid = True
         nav_to_cmd_id = None
         while self._navigate_to_valid:
@@ -980,6 +993,7 @@ class SpotWrapper():
             try:
                 nav_to_cmd_id = self._graph_nav_client.navigate_to(destination_waypoint, 1.0,
                                                                    leases=[sublease.lease_proto],
+                                                                   travel_params=travel_params,
                                                                    command_id=nav_to_cmd_id)
                 self._last_navigate_to_command = nav_to_cmd_id
             except ResponseError as e:
