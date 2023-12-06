@@ -218,7 +218,8 @@ class AsyncIdle(AsyncPeriodicQuery):
         if self._spot_wrapper._last_trajectory_command != None:
             try:
                 response = self._client.robot_command_feedback(self._spot_wrapper._last_trajectory_command)
-                status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
+                self._logger.error("Response for trajectory command ({}) : {}".format(self._spot_wrapper._last_trajectory_command, response))
+                status = response.feedback.mobility_feedback.se2_trajectory_feedback.status
                 # STATUS_AT_GOAL always means that the robot reached the goal. If the trajectory command did not
                 # request precise positioning, then STATUS_NEAR_GOAL also counts as reaching the goal
                 if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
@@ -244,7 +245,7 @@ class AsyncIdle(AsyncPeriodicQuery):
                     self._spot_wrapper._near_goal = False
                     self._spot_wrapper._last_trajectory_command = None
             except (ResponseError, RpcError) as e:
-                self._logger.error("Error when getting robot command feedback: %s", e)
+                self._logger.error("Error when getting robot command feedback for trajectory: %s", e)
                 self._spot_wrapper._last_trajectory_command = None
 
         #if self._spot_wrapper.is_standing and not self._spot_wrapper._is_moving:
@@ -771,12 +772,14 @@ class SpotWrapper():
             raise ValueError('frame_name must be \'vision\' or \'odom\'')
 
         if response[0]:
+            rospy.loginfo(f"response for trajectory cmd: {response}")
             self._last_trajectory_command = response[2]
-            command_id = self._last_trajectory_command
-            while True:
+            command_id = response[2]
+            self._trajectory_valid = True
+            while self._trajectory_valid:
                 response = self._robot_command_client.robot_command_feedback(command_id)
-                command_status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
-                movement_status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.body_movement_status
+                command_status = response.feedback.mobility_feedback.se2_trajectory_feedback.status
+                movement_status = response.feedback.mobility_feedback.se2_trajectory_feedback.body_movement_status
                 if command_status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
                     (command_status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and not precise_position) or \
                     command_status == basic_command_pb2.SE2TrajectoryCommand.Feedback.BODY_STATUS_SETTLED:
@@ -792,6 +795,9 @@ class SpotWrapper():
         else:
             self._logger.error("Failed to issue a trajectory command.")
             return response[0], response[1]
+
+    def cancel_trajectory_cmd(self):
+        self._trajectory_valid = False
 
     def list_graph(self, upload_path):
         """List waypoint ids of garph_nav
