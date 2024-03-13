@@ -655,7 +655,6 @@ class SpotROS():
         rate = rospy.Rate(50)
 
         self.rates = rospy.get_param('~rates', {})
-        self.rates["world_object"] = 10.0
         self.username = rospy.get_param('~username', 'default_value')
         self.password = rospy.get_param('~password', 'default_value')
         self.hostname = rospy.get_param('~hostname', 'default_value')
