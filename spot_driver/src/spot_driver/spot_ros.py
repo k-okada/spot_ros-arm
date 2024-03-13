@@ -8,6 +8,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose, TransformStamped, Transform
 from nav_msgs.msg import Odometry
+from jsk_recognition_msgs import BoundingBoxArray, BoundingBox
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import geometry_pb2, trajectory_pb2
@@ -616,28 +617,32 @@ class SpotROS():
 
     def publish_world_object(self, proto):
         for world_object in proto.world_objects:
+            rospy.loginfo(f"world_object {world_object}")
             if world_object.name == "world_obj_tracked_entity":
                 timestamp = rospy.Time(secs=world_object.acquisition_time.seconds, nsecs=world_object.acquisition_time.nanos)
-
+                bbox = BoundingBoxArray()
                 for key in world_object.transforms_snapshot.child_to_parent_edge_map:
                     frame = world_object.transforms_snapshot.child_to_parent_edge_map[key]
                     if not key.startswith("blob"):
                         # pass object which parent_frame_name is blank
                         rospy.loginfo(f"[pass] {frame.parent_frame_name}")
                         continue
-                    t = TransformStamped()
-                    t.header.frame_id = frame.parent_frame_name
-                    t.header.stamp = timestamp
-                    t.child_frame_id = key
-                    t.transform.translation.x = frame.parent_tform_child.position.x
-                    t.transform.translation.y = frame.parent_tform_child.position.y
-                    t.transform.translation.z = frame.parent_tform_child.position.z
-                    t.transform.rotation.w = frame.parent_tform_child.rotation.w
-                    t.transform.rotation.x = frame.parent_tform_child.rotation.x
-                    t.transform.rotation.y = frame.parent_tform_child.rotation.y
-                    t.transform.rotation.z = frame.parent_tform_child.rotation.z
-                    self.world_object_transform_broadcaster.sendTransform(t)
-                    rospy.loginfo(f"[send] {t}")
+                    box = BoundingBox()
+                    box.header.frame_id = frame.parent_frame_name
+                    box.header.stamp = timestamp
+                    box.label = abs(hash(key)) % 2**32 # Round hashed value to the range of uint32
+                    box.pose.position.x = frame.parent_tform_child.position.x
+                    box.pose.position.y = frame.parent_tform_child.position.y
+                    box.pose.position.z = frame.parent_tform_child.position.z
+                    box.pose.orientation.w = frame.parent_tform_child.orientation.w
+                    box.pose.orientation.x = frame.parent_tform_child.orientation.x
+                    box.pose.orientation.y = frame.parent_tform_child.orientation.y
+                    box.pose.orientation.z = frame.parent_tform_child.orientation.z
+                    box.dimensions.x = 1.0
+                    box.dimensions.y = 1.0
+                    box.dimensions.z = 1.0
+                    bbox.boxes.append(box)
+                self.world_object_bbox_pub.publish(bbox)
 
 
 
@@ -667,10 +672,6 @@ class SpotROS():
         # We keep a list of all the static transforms we already have so they can be republished, and so we can check
         # which ones we already have
         self.camera_static_transforms = []
-
-        self.world_object_transform_broadcaster = tf2_ros.TransformBroadcaster()
-        # world_object_transform_broadcaster publishes the tf of recognized_objects which are obtained from bosdyn's world_object api
-
 
         # Spot has 2 types of odometries: 'odom' and 'vision'
         # The former one is kinematic odometry and the second one is a combined odometry of vision and kinematics
@@ -730,6 +731,10 @@ class SpotROS():
                 for t in ['hand_color', 'hand_depth', 'hand_image', 'hand_depth_in_hand_color_frame', 'hand_color_in_hand_depth_frame']:
                     self.gripper_image_pubs.append(rospy.Publisher('camera/'+t+'/image', Image, queue_size=10))
                     self.gripper_camera_info_pubs.append(rospy.Publisher('camera/'+t+'/camera_info', CameraInfo, queue_size=10))
+
+            # World Object #
+            # world_object_bbox_pub publishes the pose and bounding box of recognized_objects which are obtained from bosdyn's world_object api
+            self.world_object_bbox_pub = rospy.Publisher('tracked_world_objects', BoundingBoxArray, queue_size=10)
 
             # Status Publishers #
             self.joint_state_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
