@@ -8,6 +8,7 @@ from bosdyn.geometry import EulerZXY
 from bosdyn import geometry
 
 from bosdyn.client.robot_state import RobotStateClient
+from bosdyn.client.world_object import WorldObjectClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 from bosdyn.client.graph_nav import GraphNavClient
 from bosdyn.client.frame_helpers import get_odom_tform_body
@@ -88,6 +89,28 @@ class AsyncRobotState(AsyncPeriodicQuery):
     def _start_query(self):
         if self._callback:
             callback_future = self._client.get_robot_state_async()
+            callback_future.add_done_callback(self._callback)
+            return callback_future
+
+class AsyncWorldObject(AsyncPeriodicQuery):
+    """Class to get world object at regular intervals.  get_world_object_async query sent to the robot at every tick.  Callback registered to defined callback function.
+
+        Attributes:
+            client: The Client to a service on the robot
+            logger: Logger object
+            rate: Rate (Hz) to trigger the query
+            callback: Callback function to call when the results of the query are available
+    """
+    def __init__(self, client, logger, rate, callback):
+        super(AsyncWorldObject, self).__init__("world_object", client, logger,
+                                           period_sec=1.0/max(rate, 1.0))
+        self._callback = None
+        if rate > 0.0:
+            self._callback = callback
+
+    def _start_query(self):
+        if self._callback:
+            callback_future = self._client.list_world_objects_async()
             callback_future.add_done_callback(self._callback)
             return callback_future
 
@@ -317,6 +340,7 @@ class SpotWrapper():
             # Clients
             try:
                 self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
+                self._world_object_client = self._robot.ensure_client(WorldObjectClient.default_service_name)
                 self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
                 self._graph_nav_client = self._robot.ensure_client(GraphNavClient.default_service_name)
                 self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
@@ -366,11 +390,14 @@ class SpotWrapper():
                     self._rear_image_requests)
             self._idle_task = AsyncIdle(self._robot_command_client,
                     self._logger, 10.0, self)
+            self._world_object_task = AsyncWorldObject(self._world_object_client,
+                    self._logger, max(0.0, self._rates.get("world_object",
+                        0.0)), self._callbacks.get("world_object", lambda:None))
 
             async_task_list = [self._robot_state_task,
                     self._robot_metrics_task, self._lease_task,
                     self._front_image_task, self._side_image_task,
-                    self._rear_image_task, self._idle_task]
+                    self._rear_image_task, self._idle_task, self._world_object_task]
 
             if self._robot.has_arm:
                 rospy.loginfo("Robot has arm so adding gripper async camera task")
@@ -411,6 +438,12 @@ class SpotWrapper():
     def robot_state(self):
         """Return latest proto from the _robot_state_task"""
         return self._robot_state_task.proto
+
+    @property
+    def world_object(self):
+        """Return latest proto from the _world_object_task"""
+        print("in property world_object")
+        return self._world_object_task.proto
 
     @property
     def metrics(self):

@@ -6,7 +6,7 @@ from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
 from tf2_msgs.msg import TFMessage
 from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
+from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose, TransformStamped, Transform
 from nav_msgs.msg import Odometry
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
@@ -58,6 +58,7 @@ class SpotROS():
         self.callbacks["side_image"] = self.SideImageCB
         self.callbacks["rear_image"] = self.RearImageCB
         self.callbacks["gripper_image"] = self.GripperImageCB
+        self.callbacks["world_object"] = self.WorldObjectCB
 
     def RobotStateCB(self, results):
         """Callback for when the Spot Wrapper gets new robot state data.
@@ -120,6 +121,9 @@ class SpotROS():
             # Behavior Faults #
             behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
             self.behavior_faults_pub.publish(behavior_fault_state_msg)
+
+
+
 
     def MetricsCB(self, results):
         """Callback for when the Spot Wrapper gets new metrics data.
@@ -263,6 +267,16 @@ class SpotROS():
                 t_image_pub.publish(image_msg0)
                 t_info_pub.publish(camera_info_msg0)
                 self.populate_camera_static_transforms(t_data)
+
+    def WorldObjectCB(self, results):
+        """Callback for when the Spot Wrapper gets new world_object data.
+
+        Args:
+            results: FutureWrapper object of AsyncPeriodicQuery callback
+        """
+        del results
+        proto = self.spot_wrapper.world_object
+        self.publish_world_object(proto) 
 
     def handle_claim(self, req):
         """ROS service handler for the claim service"""
@@ -600,6 +614,33 @@ class SpotROS():
             self.camera_static_transforms.append(static_tf)
             self.camera_static_transform_broadcaster.sendTransform(self.camera_static_transforms)
 
+    def publish_world_object(self, proto):
+        for world_object in proto.world_objects:
+            if world_object.name == "world_obj_tracked_entity":
+                timestamp = rospy.Time(secs=world_object.acquisition_time.seconds, nsecs=world_object.acquisition_time.nanos)
+
+                for key in world_object.transforms_snapshot.child_to_parent_edge_map:
+                    frame = world_object.transforms_snapshot.child_to_parent_edge_map[key]
+                    if not key.startswith("blob"):
+                        # pass object which parent_frame_name is blank
+                        rospy.loginfo(f"[pass] {frame.parent_frame_name}")
+                        continue
+                    t = TransformStamped()
+                    t.header.frame_id = frame.parent_frame_name
+                    t.header.stamp = timestamp
+                    t.child_frame_id = key
+                    t.transform.translation.x = frame.parent_tform_child.position.x
+                    t.transform.translation.y = frame.parent_tform_child.position.y
+                    t.transform.translation.z = frame.parent_tform_child.position.z
+                    t.transform.rotation.w = frame.parent_tform_child.rotation.w
+                    t.transform.rotation.x = frame.parent_tform_child.rotation.x
+                    t.transform.rotation.y = frame.parent_tform_child.rotation.y
+                    t.transform.rotation.z = frame.parent_tform_child.rotation.z
+                    self.world_object_transform_broadcaster.sendTransform(t)
+                    rospy.loginfo(f"[send] {t}")
+
+
+
     def shutdown(self):
         rospy.loginfo("Shutting down ROS driver for Spot")
         if self.spot_wrapper.check_has_arm():
@@ -614,6 +655,7 @@ class SpotROS():
         rate = rospy.Rate(50)
 
         self.rates = rospy.get_param('~rates', {})
+        self.rates["world_object"] = 10.0
         self.username = rospy.get_param('~username', 'default_value')
         self.password = rospy.get_param('~password', 'default_value')
         self.hostname = rospy.get_param('~hostname', 'default_value')
@@ -626,6 +668,10 @@ class SpotROS():
         # We keep a list of all the static transforms we already have so they can be republished, and so we can check
         # which ones we already have
         self.camera_static_transforms = []
+
+        self.world_object_transform_broadcaster = tf2_ros.TransformBroadcaster()
+        # world_object_transform_broadcaster publishes the tf of recognized_objects which are obtained from bosdyn's world_object api
+
 
         # Spot has 2 types of odometries: 'odom' and 'vision'
         # The former one is kinematic odometry and the second one is a combined odometry of vision and kinematics
