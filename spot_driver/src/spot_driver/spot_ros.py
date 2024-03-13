@@ -1,6 +1,7 @@
 from numpy import append
 import rospy
 import math
+import traceback
 
 from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
 from tf2_msgs.msg import TFMessage
@@ -8,7 +9,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose, TransformStamped, Transform
 from nav_msgs.msg import Odometry
-from jsk_recognition_msgs import BoundingBoxArray, BoundingBox
+from jsk_recognition_msgs.msg import BoundingBoxArray, BoundingBox
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import geometry_pb2, trajectory_pb2
@@ -617,33 +618,43 @@ class SpotROS():
 
     def publish_world_object(self, proto):
         for world_object in proto.world_objects:
-            rospy.loginfo(f"world_object {world_object}")
+            #rospy.loginfo(f"world_object {world_object}")
             if world_object.name == "world_obj_tracked_entity":
+                rospy.loginfo("Found tracked entity")
                 timestamp = rospy.Time(secs=world_object.acquisition_time.seconds, nsecs=world_object.acquisition_time.nanos)
                 bbox = BoundingBoxArray()
+                bbox.header.frame_id = "vision"
+                bbox.header.stamp = timestamp
                 for key in world_object.transforms_snapshot.child_to_parent_edge_map:
+                    print(f"key: {key}")
                     frame = world_object.transforms_snapshot.child_to_parent_edge_map[key]
-                    if not key.startswith("blob"):
-                        # pass object which parent_frame_name is blank
-                        rospy.loginfo(f"[pass] {frame.parent_frame_name}")
-                        continue
-                    box = BoundingBox()
-                    box.header.frame_id = frame.parent_frame_name
-                    box.header.stamp = timestamp
-                    box.label = abs(hash(key)) % 2**32 # Round hashed value to the range of uint32
-                    box.pose.position.x = frame.parent_tform_child.position.x
-                    box.pose.position.y = frame.parent_tform_child.position.y
-                    box.pose.position.z = frame.parent_tform_child.position.z
-                    box.pose.orientation.w = frame.parent_tform_child.orientation.w
-                    box.pose.orientation.x = frame.parent_tform_child.orientation.x
-                    box.pose.orientation.y = frame.parent_tform_child.orientation.y
-                    box.pose.orientation.z = frame.parent_tform_child.orientation.z
-                    box.dimensions.x = 1.0
-                    box.dimensions.y = 1.0
-                    box.dimensions.z = 1.0
-                    bbox.boxes.append(box)
+                    if key.startswith("blob"):
+                        try:
+                            box = BoundingBox()
+                            box.header.frame_id = frame.parent_frame_name
+                            box.header.stamp = timestamp
+                            box.label = abs(hash(key)) % 2**32 # Round hashed value to the range of uint32
+                            box.pose.position.x = frame.parent_tform_child.position.x
+                            box.pose.position.y = frame.parent_tform_child.position.y
+                            box.pose.position.z = frame.parent_tform_child.position.z
+                            box.pose.orientation.w = frame.parent_tform_child.rotation.w
+                            box.pose.orientation.x = frame.parent_tform_child.rotation.x
+                            box.pose.orientation.y = frame.parent_tform_child.rotation.y
+                            box.pose.orientation.z = frame.parent_tform_child.rotation.z
+                            box.dimensions.x = 1.0
+                            box.dimensions.y = 1.0
+                            box.dimensions.z = 1.0
+                            bbox.boxes.append(box)
+                        except Exception as e:
+                            print(e)
+                            traceback.print_exc()
+                        print("hoge")
+                    else:
+                        print("fuga")
+                rospy.loginfo("publish bbox: {}".format(bbox))
                 self.world_object_bbox_pub.publish(bbox)
-
+            else:
+                rospy.loginfo("Not tracked entity")
 
 
     def shutdown(self):

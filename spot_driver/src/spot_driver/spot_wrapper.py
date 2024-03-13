@@ -442,7 +442,7 @@ class SpotWrapper():
     @property
     def world_object(self):
         """Return latest proto from the _world_object_task"""
-        print("in property world_object")
+        #print("in property world_object")
         return self._world_object_task.proto
 
     @property
