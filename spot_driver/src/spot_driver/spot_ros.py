@@ -617,16 +617,15 @@ class SpotROS():
             self.camera_static_transform_broadcaster.sendTransform(self.camera_static_transforms)
 
     def publish_world_object(self, proto):
+        bbox = BoundingBoxArray()
+        bbox.header.frame_id = "vision"
+        bbox.header.stamp = rospy.Time.now()
         for world_object in proto.world_objects:
-            #rospy.loginfo(f"world_object {world_object}")
+            rospy.logdebug(f"world_object {world_object}")
             if world_object.name == "world_obj_tracked_entity":
                 rospy.loginfo("Found tracked entity")
                 timestamp = rospy.Time(secs=world_object.acquisition_time.seconds, nsecs=world_object.acquisition_time.nanos)
-                bbox = BoundingBoxArray()
-                bbox.header.frame_id = "vision"
-                bbox.header.stamp = timestamp
                 for key in world_object.transforms_snapshot.child_to_parent_edge_map:
-                    print(f"key: {key}")
                     frame = world_object.transforms_snapshot.child_to_parent_edge_map[key]
                     if key.startswith("blob"):
                         try:
@@ -648,13 +647,7 @@ class SpotROS():
                         except Exception as e:
                             print(e)
                             traceback.print_exc()
-                        print("hoge")
-                    else:
-                        print("fuga")
-                rospy.loginfo("publish bbox: {}".format(bbox))
-                self.world_object_bbox_pub.publish(bbox)
-            else:
-                rospy.loginfo("Not tracked entity")
+        self.world_object_bbox_pub.publish(bbox)
 
 
     def shutdown(self):
