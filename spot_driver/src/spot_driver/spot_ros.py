@@ -1,7 +1,13 @@
 from numpy import append
 import rospy
+import logging
 import math
+import threading
 import traceback
+
+import actionlib
+import functools
+import tf2_ros
 
 from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
 from tf2_msgs.msg import TFMessage
@@ -14,10 +20,16 @@ from jsk_recognition_msgs.msg import BoundingBoxArray, BoundingBox
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import Quaternion, SE2VelocityLimit
+from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.client import math_helpers
-import actionlib
-import functools
-import tf2_ros
+
+from geometry_msgs.msg import (Pose, Transform, TransformStamped, Twist,
+                               TwistWithCovarianceStamped)
+from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import CameraInfo, Image, JointState, PointCloud2
+from std_srvs.srv import SetBool, SetBoolResponse, Trigger, TriggerResponse
+from tf2_msgs.msg import TFMessage
 
 from spot_msgs.msg import Metrics
 from spot_msgs.msg import LeaseArray, LeaseResource
@@ -43,9 +55,6 @@ from spot_msgs.srv import Dock, DockResponse, GetDockState, GetDockStateResponse
 from .ros_helpers import *
 from .spot_wrapper import SpotWrapper
 
-import actionlib
-import logging
-import threading
 
 class SpotROS():
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
@@ -620,6 +629,9 @@ class SpotROS():
         bbox = BoundingBoxArray()
         bbox.header.frame_id = "vision"
         bbox.header.stamp = rospy.Time.now()
+        bbox_detection = BoundingBoxArray()
+        bbox_detection.header.frame_id = "vision"
+        bbox_detection.header.stamp = rospy.Time.now()
         for world_object in proto.world_objects:
             rospy.logdebug(f"world_object {world_object}")
             if world_object.name == "world_obj_tracked_entity":
@@ -628,7 +640,7 @@ class SpotROS():
                 for key in world_object.transforms_snapshot.child_to_parent_edge_map:
                     frame = world_object.transforms_snapshot.child_to_parent_edge_map[key]
                     if key.startswith("blob"):
-                        try:
+                        if not key.endswidth("detection"):
                             box = BoundingBox()
                             box.header.frame_id = frame.parent_frame_name
                             box.header.stamp = timestamp
@@ -642,12 +654,26 @@ class SpotROS():
                             box.pose.orientation.z = frame.parent_tform_child.rotation.z
                             box.dimensions.x = 1.0
                             box.dimensions.y = 1.0
-                            box.dimensions.z = 1.0
+                            box.dimensions.z = 0.1
                             bbox.boxes.append(box)
-                        except Exception as e:
-                            print(e)
-                            traceback.print_exc()
+                        else:
+                            box = BoundingBox()
+                            box.header.frame_id = frame.parent_frame_name
+                            box.header.stamp = timestamp
+                            box.label = abs(hash(key)) % 2**32 # Round hashed value to the range of uint32
+                            box.pose.position.x = frame.parent_tform_child.position.x
+                            box.pose.position.y = frame.parent_tform_child.position.y
+                            box.pose.position.z = frame.parent_tform_child.position.z
+                            box.pose.orientation.w = frame.parent_tform_child.rotation.w
+                            box.pose.orientation.x = frame.parent_tform_child.rotation.x
+                            box.pose.orientation.y = frame.parent_tform_child.rotation.y
+                            box.pose.orientation.z = frame.parent_tform_child.rotation.z
+                            box.dimensions.x = 1.0
+                            box.dimensions.y = 1.0
+                            box.dimensions.z = 0.1
+                            bbox_detection.boxes.append(box)
         self.world_object_bbox_pub.publish(bbox)
+        self.world_object_detection_bbox_pub.publish(bbox_detection)
 
 
     def shutdown(self):
@@ -739,6 +765,7 @@ class SpotROS():
             # World Object #
             # world_object_bbox_pub publishes the pose and bounding box of recognized_objects which are obtained from bosdyn's world_object api
             self.world_object_bbox_pub = rospy.Publisher('tracked_world_objects', BoundingBoxArray, queue_size=10)
+            self.world_object_detection_bbox_pub = rospy.Publisher('tracked_world_objects_detection', BoundingBoxArray, queue_size=10)
 
             # Status Publishers #
             self.joint_state_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
