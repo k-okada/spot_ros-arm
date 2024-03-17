@@ -9,14 +9,6 @@ import actionlib
 import functools
 import tf2_ros
 
-from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
-from tf2_msgs.msg import TFMessage
-from sensor_msgs.msg import Image, CameraInfo
-from sensor_msgs.msg import JointState
-from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose, TransformStamped, Transform
-from nav_msgs.msg import Odometry
-from jsk_recognition_msgs.msg import BoundingBoxArray, BoundingBox
-
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import Quaternion, SE2VelocityLimit
@@ -27,7 +19,7 @@ from geometry_msgs.msg import (Pose, Transform, TransformStamped, Twist,
                                TwistWithCovarianceStamped)
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import CameraInfo, Image, JointState, PointCloud2
+from sensor_msgs.msg import CameraInfo, Image, JointState
 from std_srvs.srv import SetBool, SetBoolResponse, Trigger, TriggerResponse
 from tf2_msgs.msg import TFMessage
 
@@ -56,7 +48,7 @@ from .ros_helpers import *
 from .spot_wrapper import SpotWrapper
 
 
-class SpotROS():
+class SpotROS:
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
 
     def __init__(self):
@@ -95,7 +87,7 @@ class SpotROS():
             self.odom_twist_pub.publish(twist_odom_msg)
 
             # Odom #
-            if self.mode_parent_odom_tf == 'vision':
+            if self.mode_parent_odom_tf == "vision":
                 odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=True)
             else:
                 odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=False)
@@ -114,11 +106,15 @@ class SpotROS():
             self.wifi_pub.publish(wifi_msg)
 
             # Battery States #
-            battery_states_array_msg = GetBatteryStatesFromState(state, self.spot_wrapper)
+            battery_states_array_msg = GetBatteryStatesFromState(
+                state, self.spot_wrapper
+            )
             self.battery_pub.publish(battery_states_array_msg)
 
             # Manipulator State #
-            manipulator_state_msg = GetManipulatorStatesFromState(state, self.spot_wrapper)
+            manipulator_state_msg = GetManipulatorStatesFromState(
+                state, self.spot_wrapper
+            )
             self.manipulator_pub.publish(manipulator_state_msg)
 
             # Power State #
@@ -130,11 +126,10 @@ class SpotROS():
             self.system_faults_pub.publish(system_fault_state_msg)
 
             # Behavior Faults #
-            behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
+            behavior_fault_state_msg = getBehaviorFaultsFromState(
+                state, self.spot_wrapper
+            )
             self.behavior_faults_pub.publish(behavior_fault_state_msg)
-
-
-
 
     def MetricsCB(self, results):
         """Callback for when the Spot Wrapper gets new metrics data.
@@ -155,9 +150,13 @@ class SpotROS():
                 if metric.label == "gait cycles":
                     metrics_msg.gait_cycles = metric.int_value
                 if metric.label == "time moving":
-                    metrics_msg.time_moving = rospy.Duration(metric.duration.seconds, metric.duration.nanos)
+                    metrics_msg.time_moving = rospy.Duration(
+                        metric.duration.seconds, metric.duration.nanos
+                    )
                 if metric.label == "electric power":
-                    metrics_msg.electric_power = rospy.Duration(metric.duration.seconds, metric.duration.nanos)
+                    metrics_msg.electric_power = rospy.Duration(
+                        metric.duration.seconds, metric.duration.nanos
+                    )
 
             self.metrics_pub.publish(metrics_msg)
 
@@ -179,13 +178,13 @@ class SpotROS():
 
                 for seq in resource.lease.sequence:
                     assert type(new_resource.lease.sequence) == list
-                    new_resource.lease.sequence.append(seq) # type: ignore
+                    new_resource.lease.sequence.append(seq)  # type: ignore
 
                 new_resource.lease_owner.client_name = resource.lease_owner.client_name
                 new_resource.lease_owner.user_name = resource.lease_owner.user_name
 
                 assert type(lease_array_msg.resources) == list
-                lease_array_msg.resources.append(new_resource) # type: ignore
+                lease_array_msg.resources.append(new_resource)  # type: ignore
 
             self.lease_pub.publish(lease_array_msg)
 
@@ -271,7 +270,10 @@ class SpotROS():
         del results
         data = self.spot_wrapper.gripper_images
         if self.spot_wrapper.check_has_arm() and not data:
-            rospy.loginfo_throttle(1, "We have an arm but no gripper image data received... if this happens at the start it's OK, otherwise it's a problem")
+            rospy.loginfo_throttle(
+                1,
+                "We have an arm but no gripper image data received... if this happens at the start it's OK, otherwise it's a problem",
+            )
         if data:
             for t_data, t_image_pub, t_info_pub in zip(data, self.gripper_image_pubs, self.gripper_camera_info_pubs):
                 image_msg0, camera_info_msg0 = getImageMsg(t_data, self.spot_wrapper)
@@ -279,6 +281,20 @@ class SpotROS():
                 t_info_pub.publish(camera_info_msg0)
                 self.populate_camera_static_transforms(t_data)
 
+<<<<<<< HEAD
+=======
+    def LidarPointCloudCB(self, results):
+        """Callback for when the Spot Wrapper gets new point cloud data.
+        Args:
+            results: FutureWrapper object of AsyncPeriodicQuery callback
+        """
+        data = self.spot_wrapper.point_clouds
+        if data:
+            point_cloud_msg = GetLidarPointCloudMsg(data[0], self.spot_wrapper)
+            self.lidar_point_cloud_pub.publish(point_cloud_msg)
+            self.populate_lidar_static_transforms(data[0])
+
+>>>>>>> c179665... [spot_driver] udpate
     def WorldObjectCB(self, results):
         """Callback for when the Spot Wrapper gets new world_object data.
 
@@ -287,7 +303,7 @@ class SpotROS():
         """
         del results
         proto = self.spot_wrapper.world_object
-        self.publish_world_object(proto) 
+        self.publish_world_object(proto)
 
     def handle_claim(self, req):
         """ROS service handler for the claim service"""
@@ -351,7 +367,7 @@ class SpotROS():
 
     def handle_estop_soft(self, req):
         """ROS service handler to soft-eStop the robot.  The robot will try to settle on the ground before cutting
-        power to the motors """
+        power to the motors"""
         del req
         resp = self.spot_wrapper.assertEStop(False)
         return TriggerResponse(resp[0], resp[1])
@@ -367,28 +383,24 @@ class SpotROS():
         resp = self.spot_wrapper.clear_behavior_fault(req.id)
         return ClearBehaviorFaultResponse(resp[0], resp[1])
 
-    def handle_spot_pose(self, req:SpotPoseRequest):
-        pose = {
-            "euler_x" : 0.0,
-            "euler_y" : 0.0,
-            "euler_z" : 0.0
-        }
+    def handle_spot_pose(self, req: SpotPoseRequest):
+        pose = {"euler_x": 0.0, "euler_y": 0.0, "euler_z": 0.0}
         if req.pose_type == req.CUSTOM:
-            pose['euler_x'] = req.euler_x
-            pose['euler_y'] = req.euler_y
-            pose['euler_z'] = req.euler_z
+            pose["euler_x"] = req.euler_x
+            pose["euler_y"] = req.euler_y
+            pose["euler_z"] = req.euler_z
         if req.pose_type == req.LOOK_UP:
-            pose['euler_x'] = 0
-            pose['euler_y'] = -1 * math.pi / 6.0
-            pose['euler_z'] = 0
+            pose["euler_x"] = 0
+            pose["euler_y"] = -1 * math.pi / 6.0
+            pose["euler_z"] = 0
         if req.pose_type == req.LOOK_DOWN:
-            pose['euler_x'] = 0
-            pose['euler_y'] = math.pi / 6.0
-            pose['euler_z'] = 0
+            pose["euler_x"] = 0
+            pose["euler_y"] = math.pi / 6.0
+            pose["euler_z"] = 0
         if req.pose_type == req.HEAD_TILT:
-            pose['euler_x'] = math.pi / 6.0
-            pose['euler_y'] = 0
-            pose['euler_z'] = 0
+            pose["euler_x"] = math.pi / 6.0
+            pose["euler_y"] = 0
+            pose["euler_z"] = 0
         if req.pose_type == req.SIT:
             resp = self.handle_sit(None)
             return SpotPoseResponse(resp.success, resp.message)
@@ -408,30 +420,32 @@ class SpotROS():
         # TODO: parameterize, support height param, timeout, other poses --cst
         try:
             rospy.loginfo("Told to achieve pose {} for {}".format(pose, timeout))
-            self.spot_wrapper.spot_pose(pose['euler_x'], pose['euler_y'], pose['euler_z'], timeout_sec=timeout)
-            return SpotPoseResponse(True, 'Success')
+            self.spot_wrapper.spot_pose(
+                pose["euler_x"], pose["euler_y"], pose["euler_z"], timeout_sec=timeout
+            )
+            return SpotPoseResponse(True, "Success")
         except Exception as e:
-            return SpotPoseResponse(False, 'Error:{}'.format(e))
+            return SpotPoseResponse(False, "Error:{}".format(e))
 
     def handle_stair_mode(self, req):
         """ROS service handler to set a stair mode to the robot."""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
             mobility_params.stair_hint = req.data
-            self.spot_wrapper.set_mobility_params( mobility_params )
-            return SetBoolResponse(True, 'Success')
+            self.spot_wrapper.set_mobility_params(mobility_params)
+            return SetBoolResponse(True, "Success")
         except Exception as e:
-            return SetBoolResponse(False, 'Error:{}'.format(e))
+            return SetBoolResponse(False, "Error:{}".format(e))
 
     def handle_locomotion_mode(self, req):
         """ROS service handler to set locomotion mode"""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
             mobility_params.locomotion_hint = req.locomotion_mode
-            self.spot_wrapper.set_mobility_params( mobility_params )
-            return SetLocomotionResponse(True, 'Success')
+            self.spot_wrapper.set_mobility_params(mobility_params)
+            return SetLocomotionResponse(True, "Success")
         except Exception as e:
-            return SetLocomotionResponse(False, 'Error:{}'.format(e))
+            return SetLocomotionResponse(False, "Error:{}".format(e))
 
     def handle_max_vel(self, req):
         """
@@ -446,36 +460,56 @@ class SpotROS():
         """
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
-            mobility_params.vel_limit.CopyFrom(SE2VelocityLimit(max_vel=math_helpers.SE2Velocity(req.velocity_limit.linear.x,
-                                                                                                 req.velocity_limit.linear.y,
-                                                                                                 req.velocity_limit.angular.z).to_proto()))
+            mobility_params.vel_limit.CopyFrom(
+                SE2VelocityLimit(
+                    max_vel=math_helpers.SE2Velocity(
+                        req.velocity_limit.linear.x,
+                        req.velocity_limit.linear.y,
+                        req.velocity_limit.angular.z,
+                    ).to_proto()
+                )
+            )
             self.spot_wrapper.set_mobility_params(mobility_params)
-            return SetVelocityResponse(True, 'Success')
+            return SetVelocityResponse(True, "Success")
         except Exception as e:
-            return SetVelocityResponse(False, 'Error:{}'.format(e))
+            return SetVelocityResponse(False, "Error:{}".format(e))
 
     def handle_trajectory(self, req):
         """ROS actionserver execution handler to handle receiving a request to move to a location"""
-        if req.target_pose.header.frame_id != 'body':
-            self.trajectory_server.set_aborted(TrajectoryResult(False, 'frame_id of target_pose must be \'body\''))
+        if req.target_pose.header.frame_id != "body":
+            self.trajectory_server.set_aborted(
+                TrajectoryResult(False, "frame_id of target_pose must be 'body'")
+            )
             return
         if req.duration.data.to_sec() <= 0:
-            self.trajectory_server.set_aborted(TrajectoryResult(False, 'duration must be larger than 0'))
+            self.trajectory_server.set_aborted(
+                TrajectoryResult(False, "duration must be larger than 0")
+            )
             return
 
+<<<<<<< HEAD
+=======
+        #
+        self.run_trajectory = True
+        preemption_thread = threading.Thread(
+            target=self.handle_trajectory_preemption, args=()
+        )
+        preemption_thread.start()
+
+>>>>>>> c179665... [spot_driver] udpate
         cmd_duration = rospy.Duration(req.duration.data.secs, req.duration.data.nsecs)
         resp = self.spot_wrapper.trajectory_cmd(
-                        goal_x=req.target_pose.pose.position.x,
-                        goal_y=req.target_pose.pose.position.y,
-                        goal_heading=math_helpers.Quat(
-                            w=req.target_pose.pose.orientation.w,
-                            x=req.target_pose.pose.orientation.x,
-                            y=req.target_pose.pose.orientation.y,
-                            z=req.target_pose.pose.orientation.z
-                            ).to_yaw(),
-                        cmd_duration=cmd_duration.to_sec(),
-                        precise_position=req.precise_positioning,
-                        )
+            goal_x=req.target_pose.pose.position.x,
+            goal_y=req.target_pose.pose.position.y,
+            goal_heading=math_helpers.Quat(
+                w=req.target_pose.pose.orientation.w,
+                x=req.target_pose.pose.orientation.x,
+                y=req.target_pose.pose.orientation.y,
+                z=req.target_pose.pose.orientation.z,
+            ).to_yaw(),
+            cmd_duration=cmd_duration.to_sec(),
+            precise_position=req.precise_positioning,
+        )
 
         def timeout_cb(trajectory_server, _):
             trajectory_server.publish_feedback(TrajectoryFeedback("Failed to reach goal, timed out"))
@@ -570,28 +604,85 @@ class SpotROS():
     def handle_navigate_to_feedback(self):
         """Thread function to send navigate_to feedback"""
         while not rospy.is_shutdown() and self.run_navigate_to:
-            localization_state = self.spot_wrapper._graph_nav_client.get_localization_state()
+            localization_state = (
+                self.spot_wrapper._graph_nav_client.get_localization_state()
+            )
             if localization_state.localization.waypoint_id:
+<<<<<<< HEAD
                 self.navigate_as.publish_feedback(NavigateToFeedback(localization_state.localization.waypoint_id))
             rospy.Rate(10).sleep()
+=======
+                self.navigate_as.publish_feedback(
+                    NavigateToFeedback(localization_state.localization.waypoint_id)
+                )
+            rate.sleep()
+
+    def handle_navigate_to_preemption(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and self.run_navigate_to:
+            if self.navigate_as.is_preempt_requested():
+                rospy.loginfo("Canceling navigate_to action")
+                self.run_navigate_to = False
+                self.spot_wrapper.cancel_navigate_to()
+                break
+            rate.sleep()
+>>>>>>> c179665... [spot_driver] udpate
 
     def handle_navigate_to(self, msg):
         """ROS service handler to run mission of the robot.  The robot will replay a mission"""
         # create thread to periodically publish feedback
+<<<<<<< HEAD
         feedback_thraed = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
+=======
+        feedback_thread = threading.Thread(
+            target=self.handle_navigate_to_feedback, args=()
+        )
+        preemption_thread = threading.Thread(
+            target=self.handle_navigate_to_preemption, args=()
+        )
+>>>>>>> c179665... [spot_driver] udpate
         self.run_navigate_to = True
         feedback_thraed.start()
         # run navigate_to
+<<<<<<< HEAD
         resp = self.spot_wrapper.navigate_to(upload_path = msg.upload_path,
                                              navigate_to = msg.navigate_to,
                                              initial_localization_fiducial = msg.initial_localization_fiducial,
                                              initial_localization_waypoint = msg.initial_localization_waypoint)
+=======
+        rospy.logwarn(f"msg.velocity_limit: {msg.velocity_limit}")
+        resp = self.spot_wrapper.navigate_to(
+            id_navigate_to=msg.id_navigate_to,
+            velocity_limit=(
+                (
+                    msg.velocity_limit.linear.x
+                    if msg.velocity_limit.linear.x != 0.0
+                    else None
+                ),
+                (
+                    msg.velocity_limit.linear.y
+                    if msg.velocity_limit.linear.y != 0.0
+                    else None
+                ),
+                (
+                    msg.velocity_limit.angular.z
+                    if msg.velocity_limit.angular.z != 0.0
+                    else None
+                ),
+            ),
+        )
+>>>>>>> c179665... [spot_driver] udpate
         self.run_navigate_to = False
         feedback_thraed.join()
 
         # check status
         if resp[0]:
             self.navigate_as.set_succeeded(NavigateToResult(resp[0], resp[1]))
+<<<<<<< HEAD
+=======
+        elif not resp[0] and resp[2] == "preempted":
+            self.navigate_as.set_preempted(NavigateToResult(resp[0], resp[1]))
+>>>>>>> c179665... [spot_driver] udpate
         else:
             self.navigate_as.set_aborted(NavigateToResult(resp[0], resp[1]))
 
@@ -607,23 +698,110 @@ class SpotROS():
         # We exclude the odometry frames from static transforms since they are not static. We can ignore the body
         # frame because it is a child of odom or vision depending on the mode_parent_odom_tf, and will be published
         # by the non-static transform publishing that is done by the state callback
-        excluded_frames = [self.tf_name_vision_odom, self.tf_name_kinematic_odom, "body"]
+        excluded_frames = [
+            self.tf_name_vision_odom,
+            self.tf_name_kinematic_odom,
+            "body",
+        ]
         for frame_name in image_data.shot.transforms_snapshot.child_to_parent_edge_map:
             if frame_name in excluded_frames:
                 continue
+<<<<<<< HEAD
             parent_frame = image_data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name
             existing_transforms = [(transform.header.frame_id, transform.child_frame_id) for transform in self.camera_static_transforms]
+=======
+            parent_frame = (
+                image_data.shot.transforms_snapshot.child_to_parent_edge_map.get(
+                    frame_name
+                ).parent_frame_name
+            )
+            existing_transforms = [
+                (transform.header.frame_id, transform.child_frame_id)
+                for transform in self.sensors_static_transforms
+            ]
+>>>>>>> c179665... [spot_driver] udpate
             if (parent_frame, frame_name) in existing_transforms:
                 # We already extracted this transform
                 continue
 
-            transform = image_data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
-            local_time = self.spot_wrapper.robotToLocalTime(image_data.shot.acquisition_time)
+            transform = (
+                image_data.shot.transforms_snapshot.child_to_parent_edge_map.get(
+                    frame_name
+                )
+            )
+            local_time = self.spot_wrapper.robotToLocalTime(
+                image_data.shot.acquisition_time
+            )
             tf_time = rospy.Time(local_time.seconds, local_time.nanos)
+<<<<<<< HEAD
             static_tf = populateTransformStamped(tf_time, transform.parent_frame_name, frame_name,
                                                  transform.parent_tform_child)
             self.camera_static_transforms.append(static_tf)
             self.camera_static_transform_broadcaster.sendTransform(self.camera_static_transforms)
+=======
+            static_tf = populateTransformStamped(
+                tf_time,
+                transform.parent_frame_name,
+                frame_name,
+                transform.parent_tform_child,
+            )
+            self.sensors_static_transforms.append(static_tf)
+            self.sensors_static_transform_broadcaster.sendTransform(
+                self.sensors_static_transforms
+            )
+
+    def populate_lidar_static_transforms(self, point_cloud_data):
+        """Check data received from one of the point cloud tasks and use the transform snapshot to extract the lidar frame
+        transforms. This is the transforms from body->sensor, for example. These transforms
+        never change, but they may be calibrated slightly differently for each robot so we need to generate the
+        transforms at runtime.
+        Args:
+        point_cloud_data: PointCloud protobuf data from the wrapper
+        """
+        # We exclude the odometry frames from static transforms since they are not static. We can ignore the body
+        # frame because it is a child of odom or vision depending on the mode_parent_odom_tf, and will be published
+        # by the non-static transform publishing that is done by the state callback
+        excluded_frames = [
+            self.tf_name_vision_odom,
+            self.tf_name_kinematic_odom,
+            "body",
+        ]
+        for (
+            frame_name
+        ) in (
+            point_cloud_data.point_cloud.source.transforms_snapshot.child_to_parent_edge_map
+        ):
+            if frame_name in excluded_frames:
+                continue
+            parent_frame = point_cloud_data.point_cloud.source.transforms_snapshot.child_to_parent_edge_map.get(
+                frame_name
+            ).parent_frame_name
+            existing_transforms = [
+                (transform.header.frame_id, transform.child_frame_id)
+                for transform in self.sensors_static_transforms
+            ]
+            if (parent_frame, frame_name) in existing_transforms:
+                # We already extracted this transform
+                continue
+
+            transform = point_cloud_data.point_cloud.source.transforms_snapshot.child_to_parent_edge_map.get(
+                frame_name
+            )
+            local_time = self.spot_wrapper.robotToLocalTime(
+                point_cloud_data.point_cloud.source.acquisition_time
+            )
+            tf_time = rospy.Time(local_time.seconds, local_time.nanos)
+            static_tf = populateTransformStamped(
+                tf_time,
+                transform.parent_frame_name,
+                frame_name,
+                transform.parent_tform_child,
+            )
+            self.sensors_static_transforms.append(static_tf)
+            self.sensors_static_transform_broadcaster.sendTransform(
+                self.sensors_static_transforms
+            )
+>>>>>>> c179665... [spot_driver] udpate
 
     def publish_world_object(self, proto):
         bbox = BoundingBoxArray()
@@ -636,15 +814,22 @@ class SpotROS():
             rospy.logdebug(f"world_object {world_object}")
             if world_object.name == "world_obj_tracked_entity":
                 rospy.loginfo("Found tracked entity")
-                timestamp = rospy.Time(secs=world_object.acquisition_time.seconds, nsecs=world_object.acquisition_time.nanos)
+                timestamp = rospy.Time(
+                    secs=world_object.acquisition_time.seconds,
+                    nsecs=world_object.acquisition_time.nanos,
+                )
                 for key in world_object.transforms_snapshot.child_to_parent_edge_map:
-                    frame = world_object.transforms_snapshot.child_to_parent_edge_map[key]
+                    frame = world_object.transforms_snapshot.child_to_parent_edge_map[
+                        key
+                    ]
                     if key.startswith("blob"):
                         if not key.endswidth("detection"):
                             box = BoundingBox()
                             box.header.frame_id = frame.parent_frame_name
                             box.header.stamp = timestamp
-                            box.label = abs(hash(key)) % 2**32 # Round hashed value to the range of uint32
+                            box.label = (
+                                abs(hash(key)) % 2**32
+                            )  # Round hashed value to the range of uint32
                             box.pose.position.x = frame.parent_tform_child.position.x
                             box.pose.position.y = frame.parent_tform_child.position.y
                             box.pose.position.z = frame.parent_tform_child.position.z
@@ -660,7 +845,9 @@ class SpotROS():
                             box = BoundingBox()
                             box.header.frame_id = frame.parent_frame_name
                             box.header.stamp = timestamp
-                            box.label = abs(hash(key)) % 2**32 # Round hashed value to the range of uint32
+                            box.label = (
+                                abs(hash(key)) % 2**32
+                            )  # Round hashed value to the range of uint32
                             box.pose.position.x = frame.parent_tform_child.position.x
                             box.pose.position.y = frame.parent_tform_child.position.y
                             box.pose.position.z = frame.parent_tform_child.position.z
@@ -675,7 +862,6 @@ class SpotROS():
         self.world_object_bbox_pub.publish(bbox)
         self.world_object_detection_bbox_pub.publish(bbox_detection)
 
-
     def shutdown(self):
         rospy.loginfo("Shutting down ROS driver for Spot")
         if self.spot_wrapper.check_has_arm():
@@ -686,15 +872,15 @@ class SpotROS():
 
     def main(self):
         """Main function for the SpotROS class.  Gets config from ROS and initializes the wrapper.  Holds lease from wrapper and updates all async tasks at the ROS rate"""
-        rospy.init_node('spot_ros', anonymous=True)
+        rospy.init_node("spot_ros", anonymous=True)
         rate = rospy.Rate(50)
 
-        self.rates = rospy.get_param('~rates', {})
-        self.username = rospy.get_param('~username', 'default_value')
-        self.password = rospy.get_param('~password', 'default_value')
-        self.hostname = rospy.get_param('~hostname', 'default_value')
-        self.motion_deadzone = rospy.get_param('~deadzone', 0.05)
-        self.estop_timeout = rospy.get_param('~estop_timeout', 9.0)
+        self.rates = rospy.get_param("~rates", {})
+        self.username = rospy.get_param("~username", "default_value")
+        self.password = rospy.get_param("~password", "default_value")
+        self.hostname = rospy.get_param("~hostname", "default_value")
+        self.motion_deadzone = rospy.get_param("~deadzone", 0.05)
+        self.estop_timeout = rospy.get_param("~estop_timeout", 9.0)
 
         self.camera_static_transform_broadcaster = tf2_ros.StaticTransformBroadcaster()
         # Static transform broadcaster is super simple and just a latched publisher. Every time we add a new static
@@ -706,19 +892,41 @@ class SpotROS():
         # Spot has 2 types of odometries: 'odom' and 'vision'
         # The former one is kinematic odometry and the second one is a combined odometry of vision and kinematics
         # These params enables to change which odometry frame is a parent of body frame and to change tf names of each odometry frames.
-        self.mode_parent_odom_tf = rospy.get_param('~mode_parent_odom_tf', 'vision') # 'vision' or 'odom'
-        self.tf_name_kinematic_odom = rospy.get_param('~tf_name_kinematic_odom', 'odom')
-        self.tf_name_raw_kinematic = 'odom'
-        self.tf_name_vision_odom = rospy.get_param('~tf_name_vision_odom', 'vision')
-        self.tf_name_raw_vision = 'vision'
-        if self.mode_parent_odom_tf != self.tf_name_raw_kinematic and self.mode_parent_odom_tf != self.tf_name_raw_vision:
-            rospy.logerr('rosparam \'~mode_parent_odom_tf\' should be \'odom\' or \'vision\'.')
+        self.mode_parent_odom_tf = rospy.get_param(
+            "~mode_parent_odom_tf", "vision"
+        )  # 'vision' or 'odom'
+        self.tf_name_kinematic_odom = rospy.get_param("~tf_name_kinematic_odom", "odom")
+        self.tf_name_raw_kinematic = "odom"
+        self.tf_name_vision_odom = rospy.get_param("~tf_name_vision_odom", "vision")
+        self.tf_name_raw_vision = "vision"
+        if (
+            self.mode_parent_odom_tf != self.tf_name_raw_kinematic
+            and self.mode_parent_odom_tf != self.tf_name_raw_vision
+        ):
+            rospy.logerr(
+                "rosparam '~mode_parent_odom_tf' should be 'odom' or 'vision'."
+            )
             return
 
-        self.logger = logging.getLogger('rosout')
+        self.logger = logging.getLogger("rosout")
 
-        rospy.loginfo("Starting ROS driver for Spot at "+str(self.hostname)+" as "+str(self.username)+" "+str(self.password))
-        self.spot_wrapper = SpotWrapper(self.username, self.password, self.hostname, self.logger, self.estop_timeout, self.rates, self.callbacks)
+        rospy.loginfo(
+            "Starting ROS driver for Spot at "
+            + str(self.hostname)
+            + " as "
+            + str(self.username)
+            + " "
+            + str(self.password)
+        )
+        self.spot_wrapper = SpotWrapper(
+            self.username,
+            self.password,
+            self.hostname,
+            self.logger,
+            self.estop_timeout,
+            self.rates,
+            self.callbacks,
+        )
 
         if not self.spot_wrapper.is_valid:
             rospy.logerr("Failed to connect to Spot")
@@ -729,18 +937,38 @@ class SpotROS():
 
         if self.spot_wrapper.is_valid:
             # Images #
-            self.back_image_pub = rospy.Publisher('camera/back/image', Image, queue_size=10)
-            self.frontleft_image_pub = rospy.Publisher('camera/frontleft/image', Image, queue_size=10)
-            self.frontright_image_pub = rospy.Publisher('camera/frontright/image', Image, queue_size=10)
-            self.left_image_pub = rospy.Publisher('camera/left/image', Image, queue_size=10)
-            self.right_image_pub = rospy.Publisher('camera/right/image', Image, queue_size=10)
+            self.back_image_pub = rospy.Publisher(
+                "camera/back/image", Image, queue_size=10
+            )
+            self.frontleft_image_pub = rospy.Publisher(
+                "camera/frontleft/image", Image, queue_size=10
+            )
+            self.frontright_image_pub = rospy.Publisher(
+                "camera/frontright/image", Image, queue_size=10
+            )
+            self.left_image_pub = rospy.Publisher(
+                "camera/left/image", Image, queue_size=10
+            )
+            self.right_image_pub = rospy.Publisher(
+                "camera/right/image", Image, queue_size=10
+            )
 
             # Depth #
-            self.back_depth_pub = rospy.Publisher('depth/back/image', Image, queue_size=10)
-            self.frontleft_depth_pub = rospy.Publisher('depth/frontleft/image', Image, queue_size=10)
-            self.frontright_depth_pub = rospy.Publisher('depth/frontright/image', Image, queue_size=10)
-            self.left_depth_pub = rospy.Publisher('depth/left/image', Image, queue_size=10)
-            self.right_depth_pub = rospy.Publisher('depth/right/image', Image, queue_size=10)
+            self.back_depth_pub = rospy.Publisher(
+                "depth/back/image", Image, queue_size=10
+            )
+            self.frontleft_depth_pub = rospy.Publisher(
+                "depth/frontleft/image", Image, queue_size=10
+            )
+            self.frontright_depth_pub = rospy.Publisher(
+                "depth/frontright/image", Image, queue_size=10
+            )
+            self.left_depth_pub = rospy.Publisher(
+                "depth/left/image", Image, queue_size=10
+            )
+            self.right_depth_pub = rospy.Publisher(
+                "depth/right/image", Image, queue_size=10
+            )
 
             # Image Camera Info #
             self.back_image_info_pub = rospy.Publisher('camera/back/camera_info', CameraInfo, queue_size=10)
@@ -749,47 +977,103 @@ class SpotROS():
             self.left_image_info_pub = rospy.Publisher('camera/left/camera_info', CameraInfo, queue_size=10)
             self.right_image_info_pub = rospy.Publisher('camera/right/camera_info', CameraInfo, queue_size=10)
             # Depth Camera Info #
-            self.back_depth_info_pub = rospy.Publisher('depth/back/camera_info', CameraInfo, queue_size=10)
-            self.frontleft_depth_info_pub = rospy.Publisher('depth/frontleft/camera_info', CameraInfo, queue_size=10)
-            self.frontright_depth_info_pub = rospy.Publisher('depth/frontright/camera_info', CameraInfo, queue_size=10)
-            self.left_depth_info_pub = rospy.Publisher('depth/left/camera_info', CameraInfo, queue_size=10)
-            self.right_depth_info_pub = rospy.Publisher('depth/right/camera_info', CameraInfo, queue_size=10)
+            self.back_depth_info_pub = rospy.Publisher(
+                "depth/back/camera_info", CameraInfo, queue_size=10
+            )
+            self.frontleft_depth_info_pub = rospy.Publisher(
+                "depth/frontleft/camera_info", CameraInfo, queue_size=10
+            )
+            self.frontright_depth_info_pub = rospy.Publisher(
+                "depth/frontright/camera_info", CameraInfo, queue_size=10
+            )
+            self.left_depth_info_pub = rospy.Publisher(
+                "depth/left/camera_info", CameraInfo, queue_size=10
+            )
+            self.right_depth_info_pub = rospy.Publisher(
+                "depth/right/camera_info", CameraInfo, queue_size=10
+            )
 
             self.gripper_image_pubs = []
             self.gripper_camera_info_pubs = []
             if self.spot_wrapper.check_has_arm():
-                for t in ['hand_color', 'hand_depth', 'hand_image', 'hand_depth_in_hand_color_frame', 'hand_color_in_hand_depth_frame']:
-                    self.gripper_image_pubs.append(rospy.Publisher('camera/'+t+'/image', Image, queue_size=10))
-                    self.gripper_camera_info_pubs.append(rospy.Publisher('camera/'+t+'/camera_info', CameraInfo, queue_size=10))
+                for t in [
+                    "hand_color",
+                    "hand_depth",
+                    "hand_image",
+                    "hand_depth_in_hand_color_frame",
+                    "hand_color_in_hand_depth_frame",
+                ]:
+                    self.gripper_image_pubs.append(
+                        rospy.Publisher("camera/" + t + "/image", Image, queue_size=10)
+                    )
+                    self.gripper_camera_info_pubs.append(
+                        rospy.Publisher(
+                            "camera/" + t + "/camera_info", CameraInfo, queue_size=10
+                        )
+                    )
 
+<<<<<<< HEAD
+=======
+            # Lidar Point Cloud #
+            self.lidar_point_cloud_pub = rospy.Publisher(
+                "lidar/points", PointCloud2, queue_size=10
+            )
+
+>>>>>>> c179665... [spot_driver] udpate
             # World Object #
             # world_object_bbox_pub publishes the pose and bounding box of recognized_objects which are obtained from bosdyn's world_object api
-            self.world_object_bbox_pub = rospy.Publisher('tracked_world_objects', BoundingBoxArray, queue_size=10)
-            self.world_object_detection_bbox_pub = rospy.Publisher('tracked_world_objects_detection', BoundingBoxArray, queue_size=10)
+            self.world_object_bbox_pub = rospy.Publisher(
+                "tracked_world_objects", BoundingBoxArray, queue_size=10
+            )
+            self.world_object_detection_bbox_pub = rospy.Publisher(
+                "tracked_world_objects_detection", BoundingBoxArray, queue_size=10
+            )
 
             # Status Publishers #
-            self.joint_state_pub = rospy.Publisher('joint_states', JointState, queue_size=10)
+            self.joint_state_pub = rospy.Publisher(
+                "joint_states", JointState, queue_size=10
+            )
             """Defining a TF publisher manually because of conflicts between Python3 and tf"""
-            self.tf_pub = rospy.Publisher('tf', TFMessage, queue_size=10)
-            self.metrics_pub = rospy.Publisher('status/metrics', Metrics, queue_size=10)
-            self.lease_pub = rospy.Publisher('status/leases', LeaseArray, queue_size=10)
-            self.odom_twist_pub = rospy.Publisher('odometry/twist', TwistWithCovarianceStamped, queue_size=10)
-            self.odom_pub = rospy.Publisher('odometry', Odometry, queue_size=10)
-            self.feet_pub = rospy.Publisher('status/feet', FootStateArray, queue_size=10)
-            self.estop_pub = rospy.Publisher('status/estop', EStopStateArray, queue_size=10)
-            self.wifi_pub = rospy.Publisher('status/wifi', WiFiState, queue_size=10)
-            self.manipulator_pub = rospy.Publisher('status/manipulator_state', ManipulatorState, queue_size=10)
-            self.power_pub = rospy.Publisher('status/power_state', PowerState, queue_size=10)
-            self.battery_pub = rospy.Publisher('status/battery_states', BatteryStateArray, queue_size=10)
-            self.behavior_faults_pub = rospy.Publisher('status/behavior_faults', BehaviorFaultState, queue_size=10)
-            self.system_faults_pub = rospy.Publisher('status/system_faults', SystemFaultState, queue_size=10)
+            self.tf_pub = rospy.Publisher("tf", TFMessage, queue_size=10)
+            self.metrics_pub = rospy.Publisher("status/metrics", Metrics, queue_size=10)
+            self.lease_pub = rospy.Publisher("status/leases", LeaseArray, queue_size=10)
+            self.odom_twist_pub = rospy.Publisher(
+                "odometry/twist", TwistWithCovarianceStamped, queue_size=10
+            )
+            self.odom_pub = rospy.Publisher("odometry", Odometry, queue_size=10)
+            self.feet_pub = rospy.Publisher(
+                "status/feet", FootStateArray, queue_size=10
+            )
+            self.estop_pub = rospy.Publisher(
+                "status/estop", EStopStateArray, queue_size=10
+            )
+            self.wifi_pub = rospy.Publisher("status/wifi", WiFiState, queue_size=10)
+            self.manipulator_pub = rospy.Publisher(
+                "status/manipulator_state", ManipulatorState, queue_size=10
+            )
+            self.power_pub = rospy.Publisher(
+                "status/power_state", PowerState, queue_size=10
+            )
+            self.battery_pub = rospy.Publisher(
+                "status/battery_states", BatteryStateArray, queue_size=10
+            )
+            self.behavior_faults_pub = rospy.Publisher(
+                "status/behavior_faults", BehaviorFaultState, queue_size=10
+            )
+            self.system_faults_pub = rospy.Publisher(
+                "status/system_faults", SystemFaultState, queue_size=10
+            )
 
-            self.feedback_pub = rospy.Publisher('status/feedback', Feedback, queue_size=10)
+            self.feedback_pub = rospy.Publisher(
+                "status/feedback", Feedback, queue_size=10
+            )
 
-            self.mobility_params_pub = rospy.Publisher('status/mobility_params', MobilityParams, queue_size=10)
+            self.mobility_params_pub = rospy.Publisher(
+                "status/mobility_params", MobilityParams, queue_size=10
+            )
 
-            rospy.Subscriber('cmd_vel', Twist, self.cmdVelCallback, queue_size = 1)
-            rospy.Subscriber('body_pose', Pose, self.bodyPoseCallback, queue_size = 1)
+            rospy.Subscriber("cmd_vel", Twist, self.cmdVelCallback, queue_size=1)
+            rospy.Subscriber("body_pose", Pose, self.bodyPoseCallback, queue_size=1)
 
             rospy.Service("claim", Trigger, self.handle_claim)
             rospy.Service("force_claim", Trigger, self.handle_force_claim)
@@ -809,9 +1093,31 @@ class SpotROS():
             rospy.Service("stair_mode", SetBool, self.handle_stair_mode)
             rospy.Service("locomotion_mode", SetLocomotion, self.handle_locomotion_mode)
             rospy.Service("max_velocity", SetVelocity, self.handle_max_vel)
-            rospy.Service("clear_behavior_fault", ClearBehaviorFault, self.handle_clear_behavior_fault)
+            rospy.Service(
+                "clear_behavior_fault",
+                ClearBehaviorFault,
+                self.handle_clear_behavior_fault,
+            )
 
             rospy.Service("list_graph", ListGraph, self.handle_list_graph)
+<<<<<<< HEAD
+=======
+            rospy.Service("clear_graph", Trigger, self.handle_clear_graph)
+            rospy.Service(
+                "set_localization_fiducial",
+                SetLocalizationFiducial,
+                self.handle_set_localization_fiducial,
+            )
+            rospy.Service(
+                "set_localization_waypoint",
+                SetLocalizationWaypoint,
+                self.handle_set_localization_waypoint,
+            )
+
+            rospy.Service("start_recording", Trigger, self.handle_start_recording)
+            rospy.Service("stop_recording", Trigger, self.handle_stop_recording)
+            rospy.Service("download_graph", DownloadGraph, self.handle_download_graph)
+>>>>>>> c179665... [spot_driver] udpate
 
             # Docking
             rospy.Service("dock", Dock, self.handle_dock)
@@ -822,21 +1128,27 @@ class SpotROS():
             rospy.Service("roll_over_right", Trigger, self.handle_roll_over_right)
             rospy.Service("roll_over_left", Trigger, self.handle_roll_over_left)
 
-            self.navigate_as = actionlib.SimpleActionServer('navigate_to', NavigateToAction,
-                                                            execute_cb = self.handle_navigate_to,
-                                                            auto_start = False)
+            self.navigate_as = actionlib.SimpleActionServer(
+                "navigate_to",
+                NavigateToAction,
+                execute_cb=self.handle_navigate_to,
+                auto_start=False,
+            )
             self.navigate_as.start()
 
-            self.trajectory_server = actionlib.SimpleActionServer("trajectory", TrajectoryAction,
-                                                                  execute_cb=self.handle_trajectory,
-                                                                  auto_start=False)
+            self.trajectory_server = actionlib.SimpleActionServer(
+                "trajectory",
+                TrajectoryAction,
+                execute_cb=self.handle_trajectory,
+                auto_start=False,
+            )
             self.trajectory_server.start()
 
             rospy.on_shutdown(self.shutdown)
 
-            self.auto_claim = rospy.get_param('~auto_claim', False)
-            self.auto_power_on = rospy.get_param('~auto_power_on', False)
-            self.auto_stand = rospy.get_param('~auto_stand', False)
+            self.auto_claim = rospy.get_param("~auto_claim", False)
+            self.auto_power_on = rospy.get_param("~auto_power_on", False)
+            self.auto_stand = rospy.get_param("~auto_stand", False)
 
             if self.auto_claim:
                 self.spot_wrapper.claim()
@@ -864,24 +1176,47 @@ class SpotROS():
                 mobility_params_msg = MobilityParams()
                 try:
                     mobility_params = self.spot_wrapper.get_mobility_params()
-                    mobility_params_msg.body_control.position.x = \
-                            mobility_params.body_control.base_offset_rt_footprint.points[0].pose.position.x
-                    mobility_params_msg.body_control.position.y = \
-                            mobility_params.body_control.base_offset_rt_footprint.points[0].pose.position.y
-                    mobility_params_msg.body_control.position.z = \
-                            mobility_params.body_control.base_offset_rt_footprint.points[0].pose.position.z
-                    mobility_params_msg.body_control.orientation.x = \
-                            mobility_params.body_control.base_offset_rt_footprint.points[0].pose.rotation.x
-                    mobility_params_msg.body_control.orientation.y = \
-                            mobility_params.body_control.base_offset_rt_footprint.points[0].pose.rotation.y
-                    mobility_params_msg.body_control.orientation.z = \
-                            mobility_params.body_control.base_offset_rt_footprint.points[0].pose.rotation.z
-                    mobility_params_msg.body_control.orientation.w = \
-                            mobility_params.body_control.base_offset_rt_footprint.points[0].pose.rotation.w
-                    mobility_params_msg.locomotion_hint = mobility_params.locomotion_hint
+                    mobility_params_msg.body_control.position.x = (
+                        mobility_params.body_control.base_offset_rt_footprint.points[
+                            0
+                        ].pose.position.x
+                    )
+                    mobility_params_msg.body_control.position.y = (
+                        mobility_params.body_control.base_offset_rt_footprint.points[
+                            0
+                        ].pose.position.y
+                    )
+                    mobility_params_msg.body_control.position.z = (
+                        mobility_params.body_control.base_offset_rt_footprint.points[
+                            0
+                        ].pose.position.z
+                    )
+                    mobility_params_msg.body_control.orientation.x = (
+                        mobility_params.body_control.base_offset_rt_footprint.points[
+                            0
+                        ].pose.rotation.x
+                    )
+                    mobility_params_msg.body_control.orientation.y = (
+                        mobility_params.body_control.base_offset_rt_footprint.points[
+                            0
+                        ].pose.rotation.y
+                    )
+                    mobility_params_msg.body_control.orientation.z = (
+                        mobility_params.body_control.base_offset_rt_footprint.points[
+                            0
+                        ].pose.rotation.z
+                    )
+                    mobility_params_msg.body_control.orientation.w = (
+                        mobility_params.body_control.base_offset_rt_footprint.points[
+                            0
+                        ].pose.rotation.w
+                    )
+                    mobility_params_msg.locomotion_hint = (
+                        mobility_params.locomotion_hint
+                    )
                     mobility_params_msg.stair_hint = mobility_params.stair_hint
                 except Exception as e:
-                    rospy.logerr('Error:{}'.format(e))
+                    rospy.logerr("Error:{}".format(e))
                     pass
                 self.mobility_params_pub.publish(mobility_params_msg)
                 rate.sleep()
