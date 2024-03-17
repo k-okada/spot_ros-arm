@@ -831,7 +831,7 @@ class SpotROS:
                             )  # Round hashed value to the range of uint32
                             box.pose.position.x = frame.parent_tform_child.position.x
                             box.pose.position.y = frame.parent_tform_child.position.y
-                            box.pose.position.z = frame.parent_tform_child.position.z
+                            box.pose.position.z = frame.parent_tform_child.position.z - 0.8
                             box.pose.orientation.w = frame.parent_tform_child.rotation.w
                             box.pose.orientation.x = frame.parent_tform_child.rotation.x
                             box.pose.orientation.y = frame.parent_tform_child.rotation.y
@@ -849,7 +849,7 @@ class SpotROS:
                             )  # Round hashed value to the range of uint32
                             box.pose.position.x = frame.parent_tform_child.position.x
                             box.pose.position.y = frame.parent_tform_child.position.y
-                            box.pose.position.z = frame.parent_tform_child.position.z
+                            box.pose.position.z = frame.parent_tform_child.position.z - 0.8
                             box.pose.orientation.w = frame.parent_tform_child.rotation.w
                             box.pose.orientation.x = frame.parent_tform_child.rotation.x
                             box.pose.orientation.y = frame.parent_tform_child.rotation.y
