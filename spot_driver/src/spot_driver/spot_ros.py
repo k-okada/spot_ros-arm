@@ -813,7 +813,6 @@ class SpotROS:
         for world_object in proto.world_objects:
             rospy.logdebug(f"world_object {world_object}")
             if world_object.name == "world_obj_tracked_entity":
-                rospy.loginfo("Found tracked entity")
                 timestamp = rospy.Time(
                     secs=world_object.acquisition_time.seconds,
                     nsecs=world_object.acquisition_time.nanos,
@@ -823,7 +822,7 @@ class SpotROS:
                         key
                     ]
                     if key.startswith("blob"):
-                        if not key.endswidth("detection"):
+                        if not key.endswith("detection"):
                             box = BoundingBox()
                             box.header.frame_id = frame.parent_frame_name
                             box.header.stamp = timestamp
