@@ -441,6 +441,16 @@ class SpotROS():
         except Exception as e:
             return SetVelocityResponse(False, 'Error:{}'.format(e))
 
+    def handle_trajectory_preemption(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and self.run_trajectory:
+            rate.sleep()
+            if self.trajectory_server.is_preempt_requested():
+                rospy.logwarn("Canceling trajectory action")
+                self.run_trajectory = False
+                self.spot_wrapper.cancel_trajectory_cmd()
+                break
+
     def handle_trajectory(self, req):
         """ROS actionserver execution handler to handle receiving a request to move to a location"""
         if req.target_pose.header.frame_id != 'body':
@@ -449,6 +459,11 @@ class SpotROS():
         if req.duration.data.to_sec() <= 0:
             self.trajectory_server.set_aborted(TrajectoryResult(False, 'duration must be larger than 0'))
             return
+
+        #
+        self.run_trajectory = True
+        preemption_thread = threading.Thread(target = self.handle_trajectory_preemption, args = ())
+        preemption_thread.start()
 
         cmd_duration = rospy.Duration(req.duration.data.secs, req.duration.data.nsecs)
         resp = self.spot_wrapper.trajectory_cmd(
@@ -464,42 +479,13 @@ class SpotROS():
                         precise_position=req.precise_positioning,
                         )
 
-        def timeout_cb(trajectory_server, _):
-            trajectory_server.publish_feedback(TrajectoryFeedback("Failed to reach goal, timed out"))
-            trajectory_server.set_aborted(TrajectoryResult(False, "Failed to reach goal, timed out"))
+        self.run_trajectory = False
+        preemption_thread.join()
 
-        # Abort the actionserver if cmd_duration is exceeded - the driver stops but does not provide feedback to
-        # indicate this so we monitor it ourselves
-        cmd_timeout = rospy.Timer(cmd_duration, functools.partial(timeout_cb, self.trajectory_server), oneshot=True)
-
-        # The trajectory command is non-blocking but we need to keep this function up in order to interrupt if a
-        # preempt is requested and to return success if/when the robot reaches the goal. Also check the is_active to
-        # monitor whether the timeout_cb has already aborted the command
-        rate = rospy.Rate(10)
-        while not rospy.is_shutdown() and not self.trajectory_server.is_preempt_requested() and not self.spot_wrapper.at_goal and self.trajectory_server.is_active():
-            if self.spot_wrapper.near_goal:
-                if self.spot_wrapper._last_trajectory_command_precise:
-                    self.trajectory_server.publish_feedback(TrajectoryFeedback("Near goal, performing final adjustments"))
-                else:
-                    self.trajectory_server.publish_feedback(TrajectoryFeedback("Near goal"))
-            else:
-                self.trajectory_server.publish_feedback(TrajectoryFeedback("Moving to goal"))
-            rate.sleep()
-
-        # If still active after exiting the loop, the command did not time out
-        if self.trajectory_server.is_active():
-            cmd_timeout.shutdown()
-            if self.trajectory_server.is_preempt_requested():
-                self.trajectory_server.publish_feedback(TrajectoryFeedback("Preempted"))
-                self.trajectory_server.set_preempted()
-                self.spot_wrapper.stop()
-
-            if self.spot_wrapper.at_goal:
-                self.trajectory_server.publish_feedback(TrajectoryFeedback("Reached goal"))
-                self.trajectory_server.set_succeeded(TrajectoryResult(resp[0], resp[1]))
-            else:
-                self.trajectory_server.publish_feedback(TrajectoryFeedback("Failed to reach goal"))
-                self.trajectory_server.set_aborted(TrajectoryResult(False, "Failed to reach goal"))
+        if resp[0]:
+            self.trajectory_server.set_succeeded(TrajectoryResult(resp[0], resp[1]))
+        else:
+            self.trajectory_server.set_aborted(TrajectoryResult(resp[0], resp[1]))
 
     def handle_dock(self, req):
         """Dock the robot"""
