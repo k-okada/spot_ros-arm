@@ -16,13 +16,13 @@ def id_to_short_code(id):
 
 
 def pretty_print_waypoints(
-    waypoint_id, waypoint_name, short_code_to_count, localization_id
+    waypoint_id, waypoint_name, short_code_to_count, localization_id, logger
 ):
     short_code = id_to_short_code(waypoint_id)
     if short_code is None or short_code_to_count[short_code] != 1:
         short_code = "  "  # If the short code is not valid/unique, don't show it.
 
-    print(
+    logger.info(
         "%s Waypoint name: %s id: %s short code: %s"
         % (
             "->" if localization_id == waypoint_id else "  ",
@@ -33,10 +33,10 @@ def pretty_print_waypoints(
     )
 
 
-def find_unique_waypoint_id(short_code, graph, name_to_id):
+def find_unique_waypoint_id(short_code, graph, name_to_id, logger):
     """Convert either a 2 letter short code or an annotation name into the associated unique id."""
     if graph is None:
-        print(
+        logger.info(
             "Please list the waypoints in the map before trying to navigate to a specific one (Option #4)."
         )
         return
@@ -49,7 +49,7 @@ def find_unique_waypoint_id(short_code, graph, name_to_id):
                 # Has an associated waypoint id!
                 return name_to_id[short_code]
             else:
-                print(
+                logger.info(
                     "The waypoint name %s is used for multiple different unique waypoints. Please use"
                     + "the waypoint id." % (short_code)
                 )
@@ -67,7 +67,7 @@ def find_unique_waypoint_id(short_code, graph, name_to_id):
     return ret
 
 
-def update_waypoints_and_edges(graph, localization_id, do_print=True):
+def update_waypoints_and_edges(graph, localization_id, logger):
     """Update and print waypoint ids and edge ids."""
     name_to_id = dict()
     edges = dict()
@@ -114,12 +114,11 @@ def update_waypoints_and_edges(graph, localization_id, do_print=True):
 
     # Print out the waypoints name, id, and short code in a ordered sorted by the timestamp from
     # when the waypoint was created.
-    if do_print:
-        print("%d waypoints:" % len(graph.waypoints))
-        for waypoint in waypoint_to_timestamp:
-            pretty_print_waypoints(
-                waypoint[0], waypoint[2], short_code_to_count, localization_id
-            )
+    logger.info("%d waypoints:" % len(graph.waypoints))
+    for waypoint in waypoint_to_timestamp:
+        pretty_print_waypoints(
+            waypoint[0], waypoint[2], short_code_to_count, localization_id, logger
+        )
 
     for edge in graph.edges:
         if edge.id.to_waypoint in edges:
@@ -127,14 +126,7 @@ def update_waypoints_and_edges(graph, localization_id, do_print=True):
                 edges[edge.id.to_waypoint].append(edge.id.from_waypoint)
         else:
             edges[edge.id.to_waypoint] = [edge.id.from_waypoint]
-        if do_print:
-            print(
-                "(Edge) from waypoint {} to waypoint {} (cost {})".format(
-                    edge.id.from_waypoint,
-                    edge.id.to_waypoint,
-                    edge.annotations.cost.value,
-                )
-            )
+        logger.info("(Edge) from waypoint id: {} and to waypoint id: {}".format(edge.id.from_waypoint, edge.id.to_waypoint))
 
     return name_to_id, edges
 

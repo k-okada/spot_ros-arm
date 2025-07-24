@@ -38,6 +38,10 @@ from spot_msgs.srv import ClearBehaviorFault, ClearBehaviorFaultResponse
 from spot_msgs.srv import SetVelocity, SetVelocityResponse
 from spot_msgs.srv import SpotPose, SpotPoseRequest, SpotPoseResponse
 from spot_msgs.srv import Dock, DockResponse, GetDockState, GetDockStateResponse
+from spot_msgs.srv import UploadGraph, UploadGraphResponse
+from spot_msgs.srv import SetLocalizationFiducial, SetLocalizationFiducialResponse
+from spot_msgs.srv import SetLocalizationWaypoint, SetLocalizationWaypointResponse
+from spot_msgs.srv import DownloadGraph, DownloadGraphResponse
 
 from .ros_helpers import *
 from .spot_wrapper import SpotWrapper
@@ -451,6 +455,8 @@ class SpotROS():
             return
 
         cmd_duration = rospy.Duration(req.duration.data.secs, req.duration.data.nsecs)
+        rospy.logwarn(f"req.duration: {req.duration}")
+        rospy.logwarn(f"cmd_duration: {cmd_duration}")
         resp = self.spot_wrapper.trajectory_cmd(
                         goal_x=req.target_pose.pose.position.x,
                         goal_y=req.target_pose.pose.position.y,
@@ -549,36 +555,89 @@ class SpotROS():
         mobility_params.body_control.CopyFrom(body_control)
         self.spot_wrapper.set_mobility_params(mobility_params)
 
-    def handle_list_graph(self, upload_path):
+    def handle_start_recording(self, req):
+        resp = self.spot_wrapper.start_recording()
+        return TriggerResponse(resp[0], resp[1])
+
+    def handle_stop_recording(self, req):
+        resp = self.spot_wrapper.stop_recording()
+        return TriggerResponse(resp[0], resp[1])
+
+    def handle_download_graph(self, req):
+        resp = self.spot_wrapper.download_graph(req.download_filepath)
+        return DownloadGraphResponse(resp[0], resp[1])
+
+    def handle_clear_graph(self, req):
+        """"""
+        resp = self.spot_wrapper.clear_graph()
+        return TriggerResponse(resp[0], resp[1])
+
+    def handle_list_graph(self, req):
         """ROS service handler for listing graph_nav waypoint_ids"""
-        resp = self.spot_wrapper.list_graph(upload_path)
+        resp = self.spot_wrapper.list_graph()
         return ListGraphResponse(resp)
+
+    def handle_upload_graph(self, req):
+        """"""
+        resp = self.spot_wrapper.upload_graph(req.upload_filepath)
+        return UploadGraphResponse(resp[0], resp[1])
+
+    def handle_set_localization_fiducial(self, req):
+        """"""
+        resp = self.spot_wrapper.set_localization_fiducial()
+        return SetLocalizationFiducialResponse(resp[0], resp[1])
+
+    def handle_set_localization_waypoint(self, req):
+        """"""
+        resp = self.spot_wrapper.set_localization_waypoint(req.waypoint_id)
+        return SetLocalizationWaypointResponse(resp[0], resp[1])
 
     def handle_navigate_to_feedback(self):
         """Thread function to send navigate_to feedback"""
+        rate = rospy.Rate(10)
         while not rospy.is_shutdown() and self.run_navigate_to:
             localization_state = self.spot_wrapper._graph_nav_client.get_localization_state()
             if localization_state.localization.waypoint_id:
                 self.navigate_as.publish_feedback(NavigateToFeedback(localization_state.localization.waypoint_id))
-            rospy.Rate(10).sleep()
+            rate.sleep()
+
+    def handle_navigate_to_preemption(self):
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and self.run_navigate_to:
+            if self.navigate_as.is_preempt_requested():
+                rospy.loginfo('Canceling navigate_to action')
+                self.run_navigate_to = False
+                self.spot_wrapper.cancel_navigate_to()
+                break
+            rate.sleep()
 
     def handle_navigate_to(self, msg):
         """ROS service handler to run mission of the robot.  The robot will replay a mission"""
         # create thread to periodically publish feedback
-        feedback_thraed = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
+        feedback_thread = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
+        preemption_thread = threading.Thread(target = self.handle_navigate_to_preemption, args = ())
         self.run_navigate_to = True
-        feedback_thraed.start()
+        feedback_thread.start()
+        preemption_thread.start()
         # run navigate_to
-        resp = self.spot_wrapper.navigate_to(upload_path = msg.upload_path,
-                                             navigate_to = msg.navigate_to,
-                                             initial_localization_fiducial = msg.initial_localization_fiducial,
-                                             initial_localization_waypoint = msg.initial_localization_waypoint)
+        rospy.logwarn(f"msg.velocity_limit: {msg.velocity_limit}")
+        resp = self.spot_wrapper.navigate_to(
+                id_navigate_to = msg.id_navigate_to,
+                velocity_limit=(
+                    msg.velocity_limit.linear.x if msg.velocity_limit.linear.x != 0.0 else None,
+                    msg.velocity_limit.linear.y if msg.velocity_limit.linear.y != 0.0 else None,
+                    msg.velocity_limit.angular.z if msg.velocity_limit.angular.z != 0.0 else None
+                    )
+                )
         self.run_navigate_to = False
-        feedback_thraed.join()
+        feedback_thread.join()
+        preemption_thread.join()
 
         # check status
         if resp[0]:
             self.navigate_as.set_succeeded(NavigateToResult(resp[0], resp[1]))
+        elif not resp[0] and resp[2] == 'preempted':
+            self.navigate_as.set_preempted(NavigateToResult(resp[0], resp[1]))
         else:
             self.navigate_as.set_aborted(NavigateToResult(resp[0], resp[1]))
 
@@ -809,7 +868,21 @@ class SpotROS():
             rospy.Service("max_velocity", SetVelocity, self.handle_max_vel)
             rospy.Service("clear_behavior_fault", ClearBehaviorFault, self.handle_clear_behavior_fault)
 
+            rospy.Service("upload_graph", UploadGraph, self.handle_upload_graph)
             rospy.Service("list_graph", ListGraph, self.handle_list_graph)
+            rospy.Service("clear_graph", Trigger, self.handle_clear_graph)
+            rospy.Service("set_localization_fiducial", SetLocalizationFiducial, self.handle_set_localization_fiducial)
+            rospy.Service("set_localization_waypoint", SetLocalizationWaypoint, self.handle_set_localization_waypoint)
+
+            rospy.Service("start_recording",
+                          Trigger,
+                          self.handle_start_recording)
+            rospy.Service("stop_recording",
+                          Trigger,
+                          self.handle_stop_recording)
+            rospy.Service("download_graph",
+                          DownloadGraph,
+                          self.handle_download_graph)
 
             # Docking
             rospy.Service("dock", Dock, self.handle_dock)
