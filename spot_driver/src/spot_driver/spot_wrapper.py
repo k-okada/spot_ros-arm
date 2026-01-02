@@ -365,6 +365,8 @@ class SpotWrapper():
             self._current_edge_snapshots = dict()  # maps id to edge snapshot
             self._current_annotation_name_to_wp_id = dict()
 
+            self._cancel_navigate_to = False
+
             # Async Tasks
             self._async_task_list = []
             self._robot_state_task = AsyncRobotState(self._robot_state_client,
@@ -1042,6 +1044,9 @@ class SpotWrapper():
 #            # The robot is not localized to the newly uploaded graph.
 #            self._logger.info("Upload complete! The robot is currently not localized to the map; please localize the robot using commands (2) or (3) before attempting a navigation command.")
 
+    def cancel_navigate_to(self):
+        self._cancel_navigate_to = True
+
     def _navigate_to(self, goal):
         """Navigate to a specific waypoint."""
         # Take the first argument as the destination waypoint.
@@ -1051,6 +1056,13 @@ class SpotWrapper():
         #    return
 
         self._lease = self._lease_wallet.get_lease()
+
+        if self._current_graph is None:
+            try:
+                self._list_graph_waypoint_and_edge_ids()
+            except Exception as e:
+                return False, "No graph loaded (upload graph first)"
+
         destination_waypoint = graph_nav_util.find_unique_waypoint_id(
             goal, self._current_graph, self._current_annotation_name_to_wp_id)
         if not destination_waypoint:
@@ -1066,9 +1078,10 @@ class SpotWrapper():
         self._lease_keepalive.shutdown()
 
         # Navigate to the destination waypoint.
+        self._cancel_navigate_to = False
         is_finished = False
         nav_to_cmd_id = -1
-        while not is_finished:
+        while (not is_finished) and (not self._cancel_navigate_to): # Exit navigate_to loop when cancel request is received
             # Issue the navigation command about twice a second such that it is easy to terminate the
             # navigation command (with estop or killing the program).
             nav_to_cmd_id = self._graph_nav_client.navigate_to(destination_waypoint, 1.0,
