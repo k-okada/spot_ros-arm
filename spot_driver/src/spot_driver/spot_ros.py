@@ -568,22 +568,38 @@ class SpotROS():
                 self.navigate_as.publish_feedback(NavigateToFeedback(localization_state.localization.waypoint_id))
             rospy.Rate(10).sleep()
 
+    def handle_navigate_to_cancel(self):
+        """Thread function to cancel the current navigate_to"""
+        while not rospy.is_shutdown() and self.run_navigate_to:
+            if self.navigate_as.is_preempt_requested():
+                rospy.loginfo("Cancelling graph nav navigate_to...")
+                self.spot_wrapper.cancel_navigate_to()
+                self._navigate_to_canceled = True
+                break
+            rospy.Rate(10).sleep()
+
     def handle_navigate_to(self, msg):
         """ROS service handler to run mission of the robot.  The robot will replay a mission"""
         # create thread to periodically publish feedback
-        feedback_thraed = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
+        self._navigate_to_canceled = False
+        feedback_thread = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
+        preempt_thread = threading.Thread(target = self.handle_navigate_to_cancel, args = ())
         self.run_navigate_to = True
-        feedback_thraed.start()
+        feedback_thread.start()
+        preempt_thread.start()
         # run navigate_to
         resp = self.spot_wrapper.navigate_to(upload_path = msg.upload_path,
                                              navigate_to = msg.navigate_to,
                                              initial_localization_fiducial = msg.initial_localization_fiducial,
                                              initial_localization_waypoint = msg.initial_localization_waypoint)
         self.run_navigate_to = False
-        feedback_thraed.join()
+        feedback_thread.join()
+        preempt_thread.join()
 
         # check status
-        if resp[0]:
+        if self._navigate_to_canceled:
+            self.navigate_as.set_preempted(NavigateToResult(False, "Cancelled"))
+        elif resp[0]:
             self.navigate_as.set_succeeded(NavigateToResult(resp[0], resp[1]))
         else:
             self.navigate_as.set_aborted(NavigateToResult(resp[0], resp[1]))

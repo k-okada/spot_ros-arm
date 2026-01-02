@@ -34,7 +34,22 @@ from . import graph_nav_util
 
 import bosdyn.api.robot_state_pb2
 from bosdyn.api import basic_command_pb2
+from google.protobuf.message import DecodeError
 from google.protobuf.timestamp_pb2 import Timestamp
+
+try:
+    from bosdyn.client.exceptions import ProtobufDecodeError
+
+    def handle_protobuf_decode_error(exception):
+        if isinstance(exception, ProtobufDecodeError):
+            rospy.logwarn("Caught ProtobufDecodeError. Maybe network traffic is busy")
+            rospy.logwarn(exception)
+            pass
+
+except ImportError:
+    def handle_protobuf_decode_error(exception):
+        pass
+
 
 """
 Image sources:
@@ -92,6 +107,9 @@ class AsyncRobotState(AsyncPeriodicQuery):
             callback_future.add_done_callback(self._callback)
             return callback_future
 
+    def _handle_error(self, exception):
+        handle_protobuf_decode_error(exception)
+
 class AsyncWorldObject(AsyncPeriodicQuery):
     """Class to get world object at regular intervals.  get_world_object_async query sent to the robot at every tick.  Callback registered to defined callback function.
 
@@ -113,6 +131,9 @@ class AsyncWorldObject(AsyncPeriodicQuery):
             callback_future = self._client.list_world_objects_async()
             callback_future.add_done_callback(self._callback)
             return callback_future
+
+    def _handle_error(self, exception):
+        handle_protobuf_decode_error(exception)
 
 class AsyncMetrics(AsyncPeriodicQuery):
     """Class to get robot metrics at regular intervals.  get_robot_metrics_async query sent to the robot at every tick.  Callback registered to defined callback function.
@@ -136,6 +157,9 @@ class AsyncMetrics(AsyncPeriodicQuery):
             callback_future.add_done_callback(self._callback)
             return callback_future
 
+    def _handle_error(self, exception):
+        handle_protobuf_decode_error(exception)
+
 class AsyncLease(AsyncPeriodicQuery):
     """Class to get lease state at regular intervals.  list_leases_async query sent to the robot at every tick.  Callback registered to defined callback function.
 
@@ -157,6 +181,9 @@ class AsyncLease(AsyncPeriodicQuery):
             callback_future = self._client.list_leases_async()
             callback_future.add_done_callback(self._callback)
             return callback_future
+
+    def _handle_error(self, exception):
+        handle_protobuf_decode_error(exception)
 
 class AsyncImageService(AsyncPeriodicQuery):
     """Class to get images at regular intervals.  get_image_from_sources_async query sent to the robot at every tick.  Callback registered to defined callback function.
@@ -180,6 +207,9 @@ class AsyncImageService(AsyncPeriodicQuery):
             callback_future = self._client.get_image_async(self._image_requests)
             callback_future.add_done_callback(self._callback)
             return callback_future
+
+    def _handle_error(self, exception):
+        handle_protobuf_decode_error(exception)
 
 class AsyncIdle(AsyncPeriodicQuery):
     """Class to check if the robot is moving, and if not, command a stand with the set mobility parameters
@@ -271,6 +301,9 @@ class AsyncIdle(AsyncPeriodicQuery):
                     and self._spot_wrapper._last_velocity_command_time is not None
                     and self._spot_wrapper._last_docking_command is not None):
             self._spot_wrapper.stand(False)
+
+    def _handle_error(self, exception):
+        handle_protobuf_decode_error(exception)
 
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
@@ -364,6 +397,8 @@ class SpotWrapper():
             self._current_waypoint_snapshots = dict()  # maps id to waypoint snapshot
             self._current_edge_snapshots = dict()  # maps id to edge snapshot
             self._current_annotation_name_to_wp_id = dict()
+
+            self._cancel_navigate_to = False
 
             # Async Tasks
             self._async_task_list = []
@@ -835,9 +870,9 @@ class SpotWrapper():
             self._upload_graph_and_snapshots(upload_filepath)
         if initial_localization_fiducial:
             self._set_initial_localization_fiducial()
-        #if initial_localization_waypoint:
-        #    self._set_initial_localization_waypoint([initial_localization_waypoint])
-        #self._list_graph_waypoint_and_edge_ids()
+        if initial_localization_waypoint:
+           self._set_initial_localization_waypoint([initial_localization_waypoint])
+        self._list_graph_waypoint_and_edge_ids()
         self._get_localization_state()
         if len(navigate_to) > 0:
             rospy.loginfo("Told to navigate to: [{}]".format(navigate_to))
@@ -874,7 +909,7 @@ class SpotWrapper():
             self._logger.error("No waypoint specified to initialize to.")
             return
         destination_waypoint = graph_nav_util.find_unique_waypoint_id(
-            args[0][0], self._current_graph, self._current_annotation_name_to_wp_id, self._logger)
+            args[0][0], self._current_graph, self._current_annotation_name_to_wp_id)
         if not destination_waypoint:
             # Failed to find the unique waypoint id.
             return
@@ -932,7 +967,14 @@ class SpotWrapper():
                 "rb",
             ) as snapshot_file:
                 waypoint_snapshot = map_pb2.WaypointSnapshot()
-                waypoint_snapshot.ParseFromString(snapshot_file.read())
+                try:
+                    # Sometimes ParseFromString fails when resource is busy
+                    waypoint_snapshot.ParseFromString(snapshot_file.read())
+                    time.sleep(.1) # Sleep for a millisecond to allow for parsing snapshot.
+                    # The pb2 failed to parse the string when the resource is busy.
+                except DecodeError as e:
+                    rospy.logwarn("Caught grpc DecodeError. Maybe the network traffic is busy")
+                    pass
                 self._current_waypoint_snapshots[
                     waypoint_snapshot.id
                 ] = waypoint_snapshot
@@ -946,6 +988,8 @@ class SpotWrapper():
             ) as snapshot_file:
                 edge_snapshot = map_pb2.EdgeSnapshot()
                 edge_snapshot.ParseFromString(snapshot_file.read())
+                time.sleep(.1) # Sleep for a millisecond to allow for parsing snapshot.
+                # The pb2 failed to parse the string when the resource is busy.
                 self._current_edge_snapshots[edge_snapshot.id] = edge_snapshot
         # Upload the graph to the robot.
         print("Uploading the graph and snapshots to the robot...")
@@ -1042,6 +1086,9 @@ class SpotWrapper():
 #            # The robot is not localized to the newly uploaded graph.
 #            self._logger.info("Upload complete! The robot is currently not localized to the map; please localize the robot using commands (2) or (3) before attempting a navigation command.")
 
+    def cancel_navigate_to(self):
+        self._cancel_navigate_to = True
+
     def _navigate_to(self, goal):
         """Navigate to a specific waypoint."""
         # Take the first argument as the destination waypoint.
@@ -1051,6 +1098,13 @@ class SpotWrapper():
         #    return
 
         self._lease = self._lease_wallet.get_lease()
+
+        if self._current_graph is None:
+            try:
+                self._list_graph_waypoint_and_edge_ids()
+            except Exception as e:
+                return False, "No graph loaded (upload graph first)"
+
         destination_waypoint = graph_nav_util.find_unique_waypoint_id(
             goal, self._current_graph, self._current_annotation_name_to_wp_id)
         if not destination_waypoint:
@@ -1066,9 +1120,10 @@ class SpotWrapper():
         self._lease_keepalive.shutdown()
 
         # Navigate to the destination waypoint.
+        self._cancel_navigate_to = False
         is_finished = False
         nav_to_cmd_id = -1
-        while not is_finished:
+        while (not is_finished) and (not self._cancel_navigate_to): # Exit navigate_to loop when cancel request is received
             # Issue the navigation command about twice a second such that it is easy to terminate the
             # navigation command (with estop or killing the program).
             nav_to_cmd_id = self._graph_nav_client.navigate_to(destination_waypoint, 1.0,
