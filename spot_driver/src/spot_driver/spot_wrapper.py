@@ -835,9 +835,9 @@ class SpotWrapper():
             self._upload_graph_and_snapshots(upload_filepath)
         if initial_localization_fiducial:
             self._set_initial_localization_fiducial()
-        #if initial_localization_waypoint:
-        #    self._set_initial_localization_waypoint([initial_localization_waypoint])
-        #self._list_graph_waypoint_and_edge_ids()
+        if initial_localization_waypoint:
+           self._set_initial_localization_waypoint([initial_localization_waypoint])
+        self._list_graph_waypoint_and_edge_ids()
         self._get_localization_state()
         if len(navigate_to) > 0:
             rospy.loginfo("Told to navigate to: [{}]".format(navigate_to))
@@ -874,7 +874,7 @@ class SpotWrapper():
             self._logger.error("No waypoint specified to initialize to.")
             return
         destination_waypoint = graph_nav_util.find_unique_waypoint_id(
-            args[0][0], self._current_graph, self._current_annotation_name_to_wp_id, self._logger)
+            args[0][0], self._current_graph, self._current_annotation_name_to_wp_id)
         if not destination_waypoint:
             # Failed to find the unique waypoint id.
             return
